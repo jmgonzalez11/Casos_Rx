@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#EDF1F5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#10171E" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Casos">
+<title>Casos</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+<script src="taxonomia.js" defer></script>
+<script src="app.js" defer></script>
+<script src="temario.js" defer></script>
+</head>
+<body class="locked">
+
+<div id="app">
+  <header class="topbar">
+    <h1 id="title">Nuevo caso</h1>
+    <button id="syncBtn" class="sync" type="button" data-state="local"><span class="dot" aria-hidden="true"></span><span id="syncTxt"></span></button>
+    <button id="lockBtn" class="iconbtn" type="button" aria-label="Bloquear" title="Bloquear (pedirá la frase para volver a entrar)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <!-- ============ NUEVO CASO ============ -->
+    <section id="view-nuevo" class="view">
+      <form id="caseForm" autocomplete="off" novalidate>
+        <div class="field">
+          <label class="lbl" for="f-rut">RUT</label>
+          <input id="f-rut" type="text" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="12.345.678-9">
+          <p class="hint" id="rutHint"></p>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="f-fecha">Fecha del examen</label>
+          <div class="daterow">
+            <input id="f-fecha" type="text" inputmode="numeric" placeholder="dd-mm-aaaa" maxlength="10">
+            <span class="calbtn" title="Abrir calendario">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+              <input id="f-fecha-pick" type="date" aria-label="Abrir calendario">
+            </span>
+            <button type="button" class="link" id="f-hoy">Hoy</button>
+          </div>
+        </div>
+
+        <fieldset class="field">
+          <legend>Especialidad</legend>
+          <div class="chips" id="f-esp"></div>
+        </fieldset>
+
+        <div class="field">
+          <label class="lbl" for="f-dx">Diagnóstico</label>
+          <textarea id="f-dx" rows="3" autocapitalize="sentences"></textarea>
+          <p class="hint info" id="dxHint"></p>
+        </div>
+
+        <fieldset class="field" id="fs-org" hidden>
+          <legend>Órgano o región</legend>
+          <div class="chips" id="f-org"></div>
+          <input id="f-org-otro" type="text" placeholder="Escribe el órgano o región" aria-label="Otro órgano" hidden>
+        </fieldset>
+
+        <fieldset class="field" id="fs-sub" hidden>
+          <legend>Subtema</legend>
+          <div class="chips" id="f-sub"></div>
+          <input id="f-sub-otro" type="text" placeholder="Escribe el subtema" aria-label="Otro subtema" hidden>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>Mes de rotación</legend>
+          <div class="seg" id="f-mes"></div>
+          <p class="hint" id="mesHint"></p>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>Modalidad <span class="sub">una o varias</span></legend>
+          <div class="chips" id="f-mod"></div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>Tipo de caso</legend>
+          <div class="seg" id="f-tipo"></div>
+        </fieldset>
+
+        <div class="field">
+          <label class="lbl" for="f-notas">Notas <span class="sub">opcional</span></label>
+          <textarea id="f-notas" rows="2" autocapitalize="sentences"></textarea>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn primary" id="saveBtn">Guardar caso</button>
+          <button type="button" class="btn" id="cancelEdit" hidden>Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============ MIS CASOS ============ -->
+    <section id="view-casos" class="view" hidden>
+      <div class="toolbar">
+        <div class="espbar" id="c-esp" role="group" aria-label="Filtrar por especialidad"></div>
+        <input type="search" id="c-q" placeholder="Buscar por RUT, fecha, diagnóstico, modalidad…" aria-label="Buscar en mis casos">
+        <details class="more">
+          <summary>Filtros <span class="nf" id="c-nf" hidden></span></summary>
+          <div class="filters">
+            <select id="c-org" aria-label="Órgano"></select>
+            <select id="c-sub" aria-label="Subtema"></select>
+            <select id="c-mes" aria-label="Mes de rotación"></select>
+            <select id="c-estado" aria-label="Estado de presentación">
+              <option value="">Mostrados o no</option>
+              <option value="pend">Por mostrar</option>
+              <option value="most">Mostrados</option>
+            </select>
+            <select id="c-tipo" aria-label="Tipo de caso"></select>
+          </div>
+        </details>
+      </div>
+      <div class="countrow"><p class="count" id="c-count"></p><button type="button" class="link sm" id="c-orden"></button></div>
+      <ol class="list" id="c-list"></ol>
+    </section>
+
+    <!-- ============ PRÁCTICA ============ -->
+    <section id="view-prac" class="view" hidden>
+      <div class="seg" id="p-mode"></div>
+
+      <div id="p-setup">
+        <div class="espbar" id="p-esp" role="group" aria-label="Especialidad"></div>
+        <div class="filters">
+          <select id="p-org" aria-label="Órgano"></select>
+          <select id="p-sub" aria-label="Subtema"></select>
+          <select id="p-mes" aria-label="Mes de rotación"></select>
+          <select id="p-src" aria-label="Casos a usar">
+            <option value="all">Todos los casos</option>
+            <option value="mine">Mis casos</option>
+            <option value="res">Residentes</option>
+          </select>
+          <select id="p-orden" aria-label="Orden">
+            <option value="prio">Prioridad</option>
+            <option value="azar">Al azar</option>
+            <option value="fecha">Recientes</option>
+          </select>
+          <select id="p-n" aria-label="Cantidad de casos">
+            <option value="10">10 casos</option>
+            <option value="20" selected>20 casos</option>
+            <option value="50">50 casos</option>
+            <option value="all">Todos</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox" id="p-hide"> Ocultar órgano y subtema hasta mostrar la respuesta</label>
+        <p class="hint">Prioridad: primero los casos nunca practicados, luego los que más fallas y los que no repasas hace tiempo.</p>
+        <p class="count" id="p-count"></p>
+        <button type="button" class="btn primary big" id="p-start">Empezar práctica</button>
+      </div>
+
+      <div id="p-session" hidden></div>
+
+      <div id="p-tem" hidden>
+        <div class="btnrow tight">
+          <label class="btn primary" for="t-file">Importar temario</label>
+          <input type="file" id="t-file" class="visually-hidden" accept=".pdf,.docx,.pptx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.html,.htm">
+          <button type="button" class="btn" id="t-paste">Pegar texto</button>
+          <button type="button" class="btn" id="t-add">Agregar tema</button>
+        </div>
+        <p class="hint">PDF, Word, PowerPoint, Excel, CSV o texto. Si el PDF es una imagen escaneada, pega el texto o pídele a Claude que lo convierta.</p>
+        <div class="espbar" id="t-esp" role="group" aria-label="Especialidad"></div>
+        <div class="filters">
+          <select id="t-mes" aria-label="Mes"></select>
+          <select id="t-cov" aria-label="Cobertura">
+            <option value="">Todos los temas</option>
+            <option value="sin">Sin casos</option>
+            <option value="con">Con casos</option>
+          </select>
+        </div>
+        <p class="count" id="t-count"></p>
+        <div id="t-list"></div>
+        <div class="btnrow">
+          <button type="button" class="btn" id="t-assign">Asignar mes a mis casos sin mes</button>
+          <button type="button" class="btn" id="t-export">Exportar temario (CSV)</button>
+          <button type="button" class="btn danger" id="t-clear">Borrar temario de esta especialidad</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RESIDENTES ============ -->
+    <section id="view-res" class="view" hidden>
+      <div class="toolbar">
+        <div class="btnrow tight">
+          <label class="btn primary" for="r-file">Importar Excel o CSV</label>
+          <input type="file" id="r-file" class="visually-hidden" accept=".xlsx,.xlsm,.csv,.tsv,.txt">
+          <button type="button" class="btn" id="r-clear">Vaciar lista</button>
+        </div>
+        <div class="espbar" id="r-esp" role="group" aria-label="Filtrar por especialidad"></div>
+        <input type="search" id="r-q" placeholder="Buscar por RUT, fecha, diagnóstico, residente…" aria-label="Buscar en casos de residentes">
+        <details class="more">
+          <summary>Filtros <span class="nf" id="r-nf" hidden></span></summary>
+          <div class="filters">
+            <select id="r-resid" aria-label="Residente"></select>
+            <select id="r-org" aria-label="Órgano"></select>
+            <select id="r-sub" aria-label="Subtema"></select>
+            <select id="r-mes" aria-label="Mes de rotación"></select>
+          </div>
+        </details>
+      </div>
+      <div class="countrow"><p class="count" id="r-count"></p><button type="button" class="link sm" id="r-orden"></button></div>
+      <ol class="list" id="r-list"></ol>
+    </section>
+
+    <!-- ============ AJUSTES ============ -->
+    <section id="view-cfg" class="view" hidden>
+      <div class="panel">
+        <h2>Sincronización</h2>
+        <p class="muted" id="cfg-status"></p>
+        <label class="lbl" for="cfg-url">URL de la aplicación web (Apps Script)</label>
+        <input id="cfg-url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+        <label class="lbl" for="cfg-token">Token</label>
+        <input id="cfg-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="btnrow">
+          <button type="button" class="btn primary" id="cfg-save">Guardar conexión</button>
+          <button type="button" class="btn" id="cfg-sync">Sincronizar ahora</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Seguridad</h2>
+        <label class="check"><input type="checkbox" id="cfg-remember"> Recordar la clave en este dispositivo</label>
+        <p class="hint">La app abrirá sin pedir la frase. Actívalo solo si el dispositivo tiene código de bloqueo y Face ID o Touch ID.</p>
+        <label class="lbl" for="cfg-lock">Bloqueo automático por inactividad</label>
+        <select id="cfg-lock">
+          <option value="5">5 minutos</option>
+          <option value="15">15 minutos</option>
+          <option value="30">30 minutos</option>
+          <option value="60">1 hora</option>
+        </select>
+        <div class="btnrow"><button type="button" class="btn" id="cfg-lockNow">Bloquear ahora</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>Datos</h2>
+        <p class="muted" id="cfg-counts"></p>
+        <div class="btnrow">
+          <button type="button" class="btn" id="cfg-exp-c">Exportar mis casos (CSV)</button>
+          <button type="button" class="btn" id="cfg-exp-r">Exportar residentes (CSV)</button>
+        </div>
+        <p class="hint">El archivo exportado queda sin cifrar. Bórralo cuando termines de usarlo.</p>
+        <div class="btnrow"><button type="button" class="btn danger" id="cfg-wipe">Borrar datos de este dispositivo</button></div>
+        <p class="hint">No toca el Google Sheet: al volver a conectar, los casos se descargan de nuevo.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Secciones">
+    <button type="button" data-tab="nuevo" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.5v7M8.5 12h7"/></svg>
+      Nuevo
+    </button>
+    <button type="button" data-tab="casos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5l1.5 1.5L8 5.5M4 12.5L5.5 14 8 11.5M4 18.5L5.5 20 8 17.5M11 7h9M11 13h9M11 19h9"/></svg>
+      Mis casos
+    </button>
+    <button type="button" data-tab="prac">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5C6.5 5 9.5 5 12 6.5v13C9.5 18 6.5 18 4 19.5z"/><path d="M20 6.5C17.5 5 14.5 5 12 6.5v13c2.5-1.5 5.5-1.5 8 0z"/></svg>
+      Práctica
+    </button>
+    <button type="button" data-tab="res">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M16 14.6c2.3.1 4 1.4 4.5 4.4"/></svg>
+      Residentes
+    </button>
+    <button type="button" data-tab="cfg">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+      Ajustes
+    </button>
+  </nav>
+</div>
+
+<!-- ============ ACCESO ============ -->
+<div id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <div class="mark" aria-hidden="true"><span class="m1"></span><span class="m2"></span><span class="m3"></span><span class="m4"></span></div>
+    <h1>Casos</h1>
+    <p class="tagline">Registro cifrado de casos de radiología.</p>
+    <p class="gate-msg" id="g-msg"></p>
+
+    <form id="g-connect" hidden>
+      <label class="lbl" for="g-url">URL de la aplicación web (Apps Script)</label>
+      <input id="g-url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+      <label class="lbl" for="g-token">Token</label>
+      <input id="g-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button type="submit" class="btn primary">Conectar</button>
+      <button type="button" class="link" id="g-local">Usar solo en este dispositivo por ahora</button>
+      <p class="err" id="g-err-connect"></p>
+    </form>
+
+    <form id="g-create" hidden>
+      <p class="muted">Crea una frase de acceso. Con ella se cifran los casos antes de salir de este dispositivo. Si la olvidas, los datos no se pueden recuperar.</p>
+      <label class="lbl" for="g-p1">Frase de acceso</label>
+      <input id="g-p1" type="password" autocomplete="new-password">
+      <label class="lbl" for="g-p2">Repite la frase</label>
+      <input id="g-p2" type="password" autocomplete="new-password">
+      <label class="check"><input type="checkbox" id="g-rem1"> Recordar en este dispositivo</label>
+      <button type="submit" class="btn primary">Crear clave y entrar</button>
+      <p class="err" id="g-err-create"></p>
+    </form>
+
+    <form id="g-unlock" hidden>
+      <label class="lbl" for="g-p">Frase de acceso</label>
+      <input id="g-p" type="password" autocomplete="current-password">
+      <label class="check"><input type="checkbox" id="g-rem2"> Recordar en este dispositivo</label>
+      <button type="submit" class="btn primary">Desbloquear</button>
+      <button type="button" class="link" id="g-back" hidden>Usar otra conexión</button>
+      <p class="err" id="g-err-unlock"></p>
+    </form>
+  </div>
+</div>
+
+<dialog id="detail"></dialog>
+<dialog id="impDlg"></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
