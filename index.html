@@ -235,6 +235,7 @@
           <button type="button" class="btn primary" id="cfg-save">Guardar conexión</button>
           <button type="button" class="btn" id="cfg-sync">Sincronizar ahora</button>
         </div>
+        <div class="btnrow"><button type="button" class="btn" id="cfg-pair">Conectar otro dispositivo</button></div>
       </div>
 
       <div class="panel">
@@ -298,13 +299,27 @@
     <p class="gate-msg" id="g-msg"></p>
 
     <form id="g-connect" hidden>
+      <button type="button" class="btn primary" id="g-havecode">Tengo un código de conexión</button>
+      <p class="muted sep">¿Ya usas la app en otro dispositivo? Genera el código ahí en Ajustes → Conectar otro dispositivo. Si es la primera vez, conecta con la URL y el token:</p>
       <label class="lbl" for="g-url">URL de la aplicación web (Apps Script)</label>
       <input id="g-url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
       <label class="lbl" for="g-token">Token</label>
       <input id="g-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <button type="submit" class="btn primary">Conectar</button>
+      <button type="submit" class="btn">Conectar con URL y token</button>
       <button type="button" class="link" id="g-local">Usar solo en este dispositivo por ahora</button>
       <p class="err" id="g-err-connect"></p>
+    </form>
+
+    <form id="g-pair" hidden>
+      <p class="muted">En el dispositivo que ya usas: Ajustes → Conectar otro dispositivo. Pega aquí ese código y escribe tu frase de acceso.</p>
+      <div class="lblrow"><label class="lbl" for="g-code">Código de conexión</label><button type="button" class="link sm" id="g-paste">Pegar</button></div>
+      <textarea id="g-code" class="code" rows="4" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="CASOS1-…"></textarea>
+      <label class="lbl" for="g-pp">Frase de acceso</label>
+      <input id="g-pp" type="password" autocomplete="current-password">
+      <label class="check"><input type="checkbox" id="g-rem3"> Recordar en este dispositivo</label>
+      <button type="submit" class="btn primary">Conectar</button>
+      <button type="button" class="link" id="g-manual">Conectar con URL y token</button>
+      <p class="err" id="g-err-pair"></p>
     </form>
 
     <form id="g-create" hidden>

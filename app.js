@@ -7,7 +7,7 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
@@ -190,6 +190,52 @@ async function verifyKey(key, meta) {
   try { const o = await decryptJSON(key, meta.verIv, meta.verCt, 'verifier'); return o && o.check === VERIF; }
   catch { return false; }
 }
+/* Código de conexión: permite conectar otro dispositivo pegando un texto y escribiendo la frase.
+   Contiene la sal y las iteraciones (públicas) y la URL + token cifrados con la clave de la frase.
+   Sin la frase no sirve de nada; vence a las 24 h (el vencimiento está autenticado). */
+const PAIR_PREFIX = 'CASOS1-', PAIR_TTL = 24 * 3600;
+const b64u = buf => b64e(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64ud = str => b64d(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4));
+const GAS_RE = /^https:\/\/script\.google\.com\/macros\/s\/([\w-]+)\/exec$/;
+async function makePairCode() {
+  const exp = Math.floor(Date.now() / 1000) + PAIR_TTL;
+  const m = S.cfg.endpoint.match(GAS_RE);
+  const plain = JSON.stringify(m ? { d: m[1], t: S.cfg.token } : { u: S.cfg.endpoint, t: S.cfg.token });
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: TE.encode('pair|' + exp) }, S.key, TE.encode(plain)));
+  const salt = b64d(S.meta.salt);
+  const buf = new Uint8Array(1 + 4 + 1 + salt.length + 4 + 12 + ct.length), dv = new DataView(buf.buffer);
+  let o = 0;
+  buf[o++] = 1; dv.setUint32(o, S.meta.iter); o += 4;
+  buf[o++] = salt.length; buf.set(salt, o); o += salt.length;
+  dv.setUint32(o, exp); o += 4; buf.set(iv, o); o += 12; buf.set(ct, o);
+  return PAIR_PREFIX + b64u(buf);
+}
+function parsePairCode(str) {
+  const s = String(str).replace(/\s+/g, '');
+  if (!s.toUpperCase().startsWith(PAIR_PREFIX)) throw new Error('Eso no parece un código de conexión (debe empezar con CASOS1-).');
+  let buf;
+  try { buf = b64ud(s.slice(PAIR_PREFIX.length)); } catch { throw new Error('El código está incompleto o dañado. Cópialo de nuevo.'); }
+  const dv = new DataView(buf.buffer); let o = 0;
+  if (buf.length < 40 || buf[o++] !== 1) throw new Error('El código está incompleto o dañado. Cópialo de nuevo.');
+  const iter = dv.getUint32(o); o += 4;
+  const sl = buf[o++]; if (sl < 16 || buf.length < o + sl + 4 + 12 + 17) throw new Error('El código está incompleto o dañado. Cópialo de nuevo.');
+  const salt = b64e(buf.subarray(o, o + sl)); o += sl;
+  const exp = dv.getUint32(o); o += 4;
+  const iv = buf.slice(o, o + 12); o += 12;
+  return { iter, salt, exp, iv, ct: buf.slice(o) };
+}
+async function openPairCode(p, pass) {
+  if (p.exp * 1000 < Date.now()) throw new Error('El código venció. Genera uno nuevo en el otro dispositivo.');
+  const key = await deriveKey(pass, p.salt, p.iter);
+  let o;
+  try { o = JSON.parse(TD.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: p.iv, additionalData: TE.encode('pair|' + p.exp) }, key, p.ct))); }
+  catch { throw new Error('Frase incorrecta, o el código se copió incompleto.'); }
+  const url = o.d ? `https://script.google.com/macros/s/${o.d}/exec` : o.u;
+  if (!URL_RE.test(url) || !o.t) throw new Error('El código no contiene una conexión válida.');
+  return { key, url, token: o.t };
+}
+
 // Datos asociados autenticados: ligan el texto cifrado a su id, colección y versión (impide mover o reutilizar registros).
 const aadOf = (col, id, t) => `${col}|${id}|${t}`;
 
@@ -341,12 +387,12 @@ function updateSyncPill() {
 function showGate(mode, msg = '') {
   document.body.classList.add('locked');
   $('#app').inert = true; $('#gate').hidden = false;
-  for (const m of ['connect', 'create', 'unlock']) $('#g-' + m).hidden = m !== mode;
+  for (const m of ['connect', 'pair', 'create', 'unlock']) $('#g-' + m).hidden = m !== mode;
   $('#g-msg').textContent = msg;
   $('#g-back').hidden = !S.joinMeta;
   $$('.gate .err').forEach(e => { e.textContent = ''; });
   if (mode === 'connect') { $('#g-url').value = S.cfg.endpoint || ''; }
-  setTimeout(() => { const f = $(`#g-${mode} input`); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }, 60);
+  setTimeout(() => { const f = $(`#g-${mode} textarea, #g-${mode} input`); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }, 60);
 }
 function hideGate() { document.body.classList.remove('locked'); $('#app').inert = false; $('#gate').hidden = true; }
 
@@ -1390,6 +1436,7 @@ function renderCfg() {
   $('#cfg-version').textContent = `Versión ${APP_VERSION}.` + (S.updReady ? ' Hay una actualización lista: toca el botón para aplicarla.'
     : S.cfg.lastUpdCheck ? ` Última búsqueda: ${fmtDT(S.cfg.lastUpdCheck)}` : '');
   $('#cfg-update').textContent = S.updReady ? 'Aplicar actualización' : 'Buscar actualizaciones';
+  $('#cfg-pair').hidden = !S.cfg.endpoint;
   $('#cfg-counts').textContent = `${live(S.casos).length} casos propios, ${live(S.res).length} casos de residentes y ${live(S.tem).length} temas en este dispositivo.${S.bad ? ` ${S.bad} registro(s) ilegibles ignorados.` : ''}`;
 }
 async function connectFromCfg(btn) {
@@ -1420,6 +1467,29 @@ async function wipeDevice() {
   DB.db.close();
   await new Promise(r => { const q = indexedDB.deleteDatabase('casos-rad'); q.onsuccess = q.onerror = q.onblocked = () => r(); });
   location.reload();
+}
+
+async function openPairDialog() {
+  if (!S.cfg.endpoint || !S.key) { toast('Primero conecta este dispositivo a tu Google Sheet', true); return; }
+  let code;
+  try { code = await makePairCode(); } catch (e) { toast('No se pudo generar el código: ' + e.message, true); return; }
+  const d = $('#detail');
+  const ta = h('textarea', { class: 'code', rows: '5', readonly: '', 'aria-label': 'Código de conexión' }); ta.value = code;
+  ta.addEventListener('focus', () => ta.select());
+  const vence = new Date(Date.now() + PAIR_TTL * 1000).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
+  d.replaceChildren(h('div', { class: 'dlg' },
+    h('h2', {}, 'Conectar otro dispositivo'),
+    h('ol', { class: 'steps' },
+      h('li', {}, 'Copia o comparte este código (por ejemplo con AirDrop, o copiando en el iPhone y pegando en el Mac).'),
+      h('li', {}, 'En el otro dispositivo abre la app y toca «Tengo un código de conexión».'),
+      h('li', {}, 'Pega el código y escribe tu frase de acceso de siempre.')),
+    ta,
+    h('p', { class: 'hint' }, `Vale por 24 horas (hasta el ${vence}). Va cifrado con tu frase: sin ella no sirve para conectarse ni para leer tus casos. Aun así, compártelo solo contigo.`),
+    h('div', { class: 'dlg-actions' },
+      navigator.share ? h('button', { type: 'button', class: 'btn', onclick: () => navigator.share({ title: 'Código de conexión', text: code }).catch(() => {}) }, 'Compartir') : null,
+      h('button', { type: 'button', class: 'btn', onclick: () => d.close() }, 'Cerrar'),
+      h('button', { type: 'button', class: 'btn primary', onclick: () => copyText(code, 'Código') }, 'Copiar código'))));
+  d.showModal();
 }
 
 /* ---------------- Actualizaciones de la app ---------------- */
@@ -1547,6 +1617,7 @@ function bindEvents() {
   $('#cfg-exp-r').addEventListener('click', exportRes);
   $('#cfg-wipe').addEventListener('click', wipeDevice);
   $('#cfg-update').addEventListener('click', e => checkUpdates(e.currentTarget));
+  $('#cfg-pair').addEventListener('click', openPairDialog);
   $('#g-update').addEventListener('click', e => checkUpdates(e.currentTarget));
   // Acceso
   $('#g-connect').addEventListener('submit', async e => {
@@ -1564,6 +1635,40 @@ function bindEvents() {
       if (m) { S.joinMeta = m; showGate('unlock', 'Este Sheet ya tiene casos. Ingresa la misma frase que usas en tus otros dispositivos.'); }
       else showGate('create');
     } catch (x) { S.cfg.endpoint = ''; S.cfg.token = ''; err.textContent = 'No se pudo conectar: ' + x.message; }
+    finally { busy(btn, false); }
+  });
+  $('#g-havecode').addEventListener('click', () => showGate('pair'));
+  $('#g-manual').addEventListener('click', () => showGate('connect'));
+  $('#g-url').addEventListener('input', e => {        // si pegan el código en el campo de la URL, cambia de modo
+    if (e.target.value.trim().toUpperCase().startsWith(PAIR_PREFIX)) { const c = e.target.value.trim(); e.target.value = ''; showGate('pair'); $('#g-code').value = c; $('#g-pp').focus(); }
+  });
+  $('#g-paste').addEventListener('click', async () => {
+    try { $('#g-code').value = (await navigator.clipboard.readText()).trim(); $('#g-pp').focus(); }
+    catch { toast('No se pudo leer el portapapeles: mantén presionado el campo y elige Pegar', true); }
+  });
+  $('#g-pair').addEventListener('submit', async e => {
+    e.preventDefault();
+    const err = $('#g-err-pair'); err.textContent = '';
+    const btn = e.submitter || $('#g-pair .primary');
+    const prev = { endpoint: S.cfg.endpoint, token: S.cfg.token, cursor: S.cfg.cursor };
+    try {
+      const p = parsePairCode($('#g-code').value);
+      if (!$('#g-pp').value) throw new Error('Escribe tu frase de acceso.');
+      busy(btn, true, 'Verificando…');
+      const { key, url, token } = await openPairCode(p, $('#g-pp').value);
+      busy(btn, true, 'Conectando…');
+      S.cfg.endpoint = url; S.cfg.token = token; S.cfg.cursor = 0;
+      const j = await api('getMeta');
+      const m = j.meta && j.meta.crypto ? JSON.parse(j.meta.crypto) : null;
+      if (!m || m.salt !== p.salt) throw new Error('El Sheet ya no corresponde a este código. Genera uno nuevo.');
+      if (!(await verifyKey(key, m))) throw new Error('Frase incorrecta.');
+      await DB.put('meta', m, 'crypto'); S.meta = m; await saveCfg();
+      S.key = key;
+      await setRemember($('#g-rem3').checked);
+      $('#g-pp').value = ''; $('#g-code').value = '';
+      await afterUnlock();
+      toast('Dispositivo conectado. Descargando tus casos…');
+    } catch (x) { Object.assign(S.cfg, prev); err.textContent = x.message; }
     finally { busy(btn, false); }
   });
   $('#g-local').addEventListener('click', () => { S.cfg.endpoint = ''; S.cfg.token = ''; showGate('create'); });
