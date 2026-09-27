@@ -7,7 +7,7 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
@@ -1618,6 +1618,8 @@ function bindEvents() {
   $('#cfg-wipe').addEventListener('click', wipeDevice);
   $('#cfg-update').addEventListener('click', e => checkUpdates(e.currentTarget));
   $('#cfg-pair').addEventListener('click', openPairDialog);
+  buildChoice($('#cfg-theme'), [{ value: 'light', label: 'Claro' }, { value: 'dark', label: 'Oscuro' }, { value: 'system', label: 'Sistema' }],
+    getTheme, v => applyTheme(v, true), { seg: true });
   $('#g-update').addEventListener('click', e => checkUpdates(e.currentTarget));
   // Acceso
   $('#g-connect').addEventListener('submit', async e => {

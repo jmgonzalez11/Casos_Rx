@@ -4,10 +4,17 @@
   --tabh:62px; --rail:92px;
   color-scheme:light dark;
 }
-@media (prefers-color-scheme:dark){:root{
+/* Tema: sin data-theme sigue al sistema; data-theme="light" o "dark" lo fija (Ajustes → Apariencia). */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --bg:#10171E; --surface:#18222C; --sunken:#222E3A; --ink:#E3EAF0; --muted:#95A3B0; --line:#2B3845;
   --accent:#8DB8E0; --on-accent:#10171E; --ok:#6BC08D; --warn:#E59C5E; --danger:#F08078;
 }}
+:root[data-theme=dark]{
+  --bg:#10171E; --surface:#18222C; --sunken:#222E3A; --ink:#E3EAF0; --muted:#95A3B0; --line:#2B3845;
+  --accent:#8DB8E0; --on-accent:#10171E; --ok:#6BC08D; --warn:#E59C5E; --danger:#F08078;
+  color-scheme:dark;
+}
+:root[data-theme=light]{color-scheme:light}
 
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
