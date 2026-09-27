@@ -248,6 +248,12 @@ ol.steps li{margin:4px 0}
 .impsum p{margin:3px 0}
 .impsum .warn{color:var(--warn)}
 .rut.none{color:var(--muted);font-weight:500}
+.edlg .efield{margin:0 0 14px}
+.edlg .efield>.lbl{display:block;margin:0 0 6px}
+.edlg .efield input[type=text]:not(:first-child),.edlg .efield .chips+input{margin-top:8px}
+.edlg .daterow input[type=text]{flex:1;min-width:0}
+.edlg .autoinfo,.edlg .hint.info{margin:-6px 0 8px}
+.btn.sm{min-height:36px;padding:6px 12px;font-size:.88rem}
 .gate-upd{display:block;margin:18px auto 0;color:var(--muted)}
 .err{min-height:1.2em;margin:0;font-size:.88rem;color:var(--danger)}
 

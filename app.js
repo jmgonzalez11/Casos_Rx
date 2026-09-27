@@ -7,7 +7,7 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
-const APP_VERSION = '2.4';
+const APP_VERSION = '2.5';
 
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
@@ -288,7 +288,8 @@ function eff(x) {
   const text = [x.diagnostico, x.notas].filter(Boolean).join('. ');
   const cls = (!x.organo || !x.subtema) ? classifyText(x.especialidad, text) : { organo: '', subtema: '' };
   const byExam = !x.organo && !cls.organo && x.examen ? classifyText(x.especialidad, x.examen) : null;
-  const organo = x.organo || cls.organo || (byExam && byExam.organo) || '', subtema = x.subtema || cls.subtema || '';
+  const catSub = !x.subtema && x.categoria ? subFromCategoria(x.especialidad, x.categoria, `${text} ${x.examen || ''}`) : '';
+  const organo = x.organo || cls.organo || (byExam && byExam.organo) || '', subtema = x.subtema || catSub || cls.subtema || '';
   const m = matchTema(x.especialidad, text, organo, subtema);
   const v = {
     organo, subtema, organoAuto: !x.organo && !!organo, subtemaAuto: !x.subtema && !!subtema,
@@ -450,6 +451,153 @@ function refreshForm() {
   syncOtro();
 }
 
+/* ---------------- Campo de fecha (texto con máscara + calendario) ---------------- */
+function bindDateMask(txt, pick) {
+  txt.addEventListener('input', () => {
+    const d = txt.value.replace(/\D/g, '').slice(0, 8);
+    const out = d.length > 4 ? `${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d;
+    if (txt.value !== out) txt.value = out;
+    const iso = dispToIso(out);
+    pick.value = iso || '';
+    txt.toggleAttribute('aria-invalid', d.length === 8 && !iso);
+  });
+  pick.addEventListener('change', () => { txt.value = isoToDisp(pick.value); txt.removeAttribute('aria-invalid'); });
+  pick.addEventListener('click', () => { if (matchMedia('(pointer:fine)').matches) { try { pick.showPicker(); } catch { /* sin showPicker */ } } });
+}
+const CAL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>';
+function dateField(iso, label) {
+  const txt = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'dd-mm-aaaa', maxlength: '10', 'aria-label': label });
+  const pick = h('input', { type: 'date', 'aria-label': label + ': calendario' });
+  txt.value = iso ? isoToDisp(iso) : ''; pick.value = iso || '';
+  const cal = h('span', { class: 'calbtn', title: 'Abrir calendario' }); cal.innerHTML = CAL_SVG; cal.append(pick);
+  bindDateMask(txt, pick);
+  const clear = h('button', { type: 'button', class: 'link sm', onclick: () => { txt.value = ''; pick.value = ''; txt.removeAttribute('aria-invalid'); } }, 'Borrar');
+  return { el: h('div', { class: 'daterow' }, txt, cal, clear),
+    get: () => { const v = txt.value.trim(); return !v ? '' : dispToIso(v) || null; } };   // null = fecha inválida
+}
+
+/* ---------------- Editar y reclasificar cualquier caso ---------------- */
+function openEditCase(col, id, onDone) {
+  const x0 = mapOf(col).get(id); if (!x0) return;
+  const isRes = col === 'residentes', d = $('#detail');
+  const E = { esp: x0.especialidad || '', organo: x0.organo || '', subtema: x0.subtema || '', mes: String(x0.mes || ''),
+    mods: new Set(x0.modalidades || []), tipo: x0.tipo || '', orgOtro: false, subOtro: false };
+  const dx = h('textarea', { rows: '3', 'aria-label': 'Diagnóstico' }); dx.value = x0.diagnostico || '';
+  const notas = h('textarea', { rows: '2', 'aria-label': 'Notas' }); notas.value = x0.notas || '';
+  const rut = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'characters', 'aria-label': 'RUT' }); rut.value = x0.rut || '';
+  const examen = h('input', { type: 'text', 'aria-label': 'Examen', placeholder: 'p. ej. RM de cerebro con contraste' }); examen.value = x0.examen || '';
+  const categoria = h('input', { type: 'text', 'aria-label': 'Categoría original' }); categoria.value = x0.categoria || '';
+  const resid = h('input', { type: 'text', 'aria-label': 'Aportado por', list: 'dl-resid' }); resid.value = x0.residente || '';
+  const dl = h('datalist', { id: 'dl-resid' }, ...[...new Set(live(S.res).map(r => r.residente).filter(Boolean))].sort().map(n => h('option', { value: n })));
+  const fEst = dateField(x0.fecha, isRes ? 'Fecha del estudio' : 'Fecha del examen'), fMos = dateField(x0.fechaEntrega, 'Fecha en que se mostró');
+  const orgOtro = h('input', { type: 'text', placeholder: 'Escribe el órgano o región', 'aria-label': 'Otro órgano' });
+  const subOtro = h('input', { type: 'text', placeholder: 'Escribe el subtema', 'aria-label': 'Otro subtema' });
+  const espBox = h('div', { class: 'chips' }), orgBox = h('div', { class: 'chips' }), subBox = h('div', { class: 'chips' });
+  const mesBox = h('div', { class: 'seg' }), modBox = h('div', { class: 'chips' }), tipoBox = h('div', { class: 'seg' });
+  const autoInfo = h('p', { class: 'hint info' });
+  const rutInfo = h('p', { class: 'hint' });
+
+  const text = () => [dx.value, notas.value].map(v => v.trim()).filter(Boolean).join('. ');
+  const auto = () => {                                   // lo que la app propondría con los datos actuales
+    const c = classifyText(E.esp, text());
+    const byEx = !c.organo && examen.value.trim() ? classifyText(E.esp, examen.value) : {};
+    const organo = c.organo || byEx.organo || '';
+    const m = matchTema(E.esp, text(), E.organo || organo, E.subtema || c.subtema);
+    const catSub = isRes && categoria.value.trim() ? subFromCategoria(E.esp, categoria.value, `${text()} ${examen.value}`) : '';
+    return { organo, subtema: catSub || c.subtema || '', mes: m && m.tema.mes ? String(m.tema.mes) : '', tema: m ? m.tema.tema : '' };
+  };
+  const drawOrgSub = () => {
+    const A = auto(), orgs = organosDe(E.esp), subs = subtemasDe(E.esp);
+    E.orgOtro = E.orgOtro || (!!E.organo && !orgs.includes(E.organo));
+    E.subOtro = E.subOtro || (!!E.subtema && !subs.includes(E.subtema));
+    const opts = (list, a) => [{ value: '', label: a ? `Automático: ${a}` : 'Automático' }, ...list.map(o => ({ value: o, label: o })), { value: '__otro', label: 'Otro…' }];
+    buildChoice(orgBox, opts(orgs, A.organo), () => (E.orgOtro ? '__otro' : E.organo), v => {
+      if (v === '__otro') { E.orgOtro = true; E.organo = orgOtro.value.trim(); } else { E.orgOtro = false; E.organo = v; }
+      orgOtro.hidden = !E.orgOtro; drawAuto();
+    }, { chipCls: 'sm' });
+    buildChoice(subBox, opts(subs, A.subtema), () => (E.subOtro ? '__otro' : E.subtema), v => {
+      if (v === '__otro') { E.subOtro = true; E.subtema = subOtro.value.trim(); } else { E.subOtro = false; E.subtema = v; }
+      subOtro.hidden = !E.subOtro; drawAuto();
+    }, { chipCls: 'sm' });
+    orgOtro.hidden = !E.orgOtro; subOtro.hidden = !E.subOtro;
+    if (E.orgOtro) orgOtro.value = E.organo; if (E.subOtro) subOtro.value = E.subtema;
+    buildChoice(mesBox, [{ value: '', label: A.mes ? `Auto (${A.mes})` : 'Auto' }, ...MESES.map(m => ({ value: m, label: 'Mes ' + m }))], () => E.mes, v => { E.mes = v; drawAuto(); }, { seg: true });
+    drawAuto(A);
+  };
+  const drawAuto = (A = auto()) => {
+    const parts = [];
+    if (!E.organo && A.organo) parts.push(`órgano ${A.organo}`);
+    if (!E.subtema && A.subtema) parts.push(`subtema ${A.subtema}`);
+    if (!E.mes && A.mes) parts.push(`mes ${A.mes}`);
+    autoInfo.textContent = (parts.length ? `En automático: ${parts.join(', ')}.` : '') + (A.tema ? ` Tema del temario: «${A.tema}».` : '');
+  };
+  buildChoice(espBox, ESPECIALIDADES.map(e => ({ value: e, label: e })), () => E.esp, v => {
+    E.esp = v;
+    if (!E.orgOtro && !organosDe(v).includes(E.organo)) E.organo = '';
+    if (!E.subOtro && !subtemasDe(v).includes(E.subtema)) E.subtema = '';
+    drawOrgSub();
+  }, { esp: true, chipCls: 'sm' });
+  buildChoice(modBox, MODALIDADES.map(m => ({ value: m, label: m })), () => E.mods, v => { E.mods.has(v) ? E.mods.delete(v) : E.mods.add(v); }, { chipCls: 'sm' });
+  buildChoice(tipoBox, [{ value: '', label: '—' }, ...TIPOS.map(t => ({ value: t, label: t }))], () => E.tipo, v => { E.tipo = v; }, { seg: true });
+  orgOtro.addEventListener('input', () => { E.organo = orgOtro.value.trim(); drawAuto(); });
+  subOtro.addEventListener('input', () => { E.subtema = subOtro.value.trim(); drawAuto(); });
+  const later = debounce(drawOrgSub, 300);
+  [dx, notas, examen, categoria].forEach(el => el.addEventListener('input', later));
+  rut.addEventListener('input', () => {
+    const c = rutClean(rut.value);
+    rutInfo.textContent = c.length >= 7 && !rutValid(rut.value) ? 'El dígito verificador no calza' : '';
+    rutInfo.className = 'hint' + (rutInfo.textContent ? ' warn' : '');
+  });
+  rut.addEventListener('blur', () => { if (rutValid(rut.value)) rut.value = rutFormat(rut.value); });
+
+  const row = (label, ...els) => h('div', { class: 'efield' }, h('span', { class: 'lbl' }, label), ...els);
+  const save = async btn => {
+    const fe = fEst.get(), fm = fMos.get();
+    if (fe === null || fm === null) { toast('Revisa las fechas (dd-mm-aaaa)', true); return; }
+    const r = rut.value.trim();
+    if (!isRes && rutClean(r).length < 2) { toast('Ingresa el RUT', true); return; }
+    if (!isRes && !fe) { toast('Ingresa la fecha del examen', true); return; }
+    if (!E.esp) { toast('Elige la especialidad', true); return; }
+    if (r && !rutValid(r) && !confirm('El dígito verificador del RUT no calza. ¿Guardar igual?')) return;
+    const p = { ...mapOf(col).get(id),
+      rut: r ? (rutValid(r) ? rutFormat(r) : r) : '', fecha: fe, especialidad: E.esp,
+      organo: E.organo, subtema: E.subtema, mes: E.mes, modalidades: MODALIDADES.filter(m => E.mods.has(m)).concat([...E.mods].filter(m => !MODALIDADES.includes(m))),
+      tipo: E.tipo, diagnostico: dx.value.trim(), notas: notas.value.trim() };
+    if (isRes) Object.assign(p, { fechaEntrega: fm, examen: examen.value.trim(), categoria: categoria.value.trim(), residente: resid.value.trim() });
+    busy(btn, true, 'Guardando…');
+    try { await saveRecord(col, p); } catch (e) { toast('No se pudo guardar: ' + e.message, true); return; } finally { busy(btn, false); }
+    d.close(); renderLists(); toast('Cambios guardados');
+    if (onDone) onDone();
+  };
+  d.replaceChildren(h('div', { class: 'dlg edlg' },
+    h('h2', {}, 'Editar caso'),
+    row('Diagnóstico', dx),
+    row('Especialidad', espBox),
+    row('Órgano o región', orgBox, orgOtro),
+    row('Subtema', subBox, subOtro),
+    row('Mes de rotación', mesBox),
+    autoInfo,
+    h('div', { class: 'btnrow tight' }, h('button', { type: 'button', class: 'btn sm', onclick: () => {
+      E.organo = ''; E.subtema = ''; E.mes = ''; E.orgOtro = false; E.subOtro = false; drawOrgSub();
+      toast('Órgano, subtema y mes quedaron en automático');
+    } }, 'Reclasificar automáticamente')),
+    row('RUT', rut, rutInfo),
+    row(isRes ? 'Fecha del estudio' : 'Fecha del examen', fEst.el),
+    isRes ? row('Fecha en que se mostró', fMos.el) : null,
+    row('Modalidad', modBox),
+    isRes ? row('Examen', examen) : null,
+    row('Tipo', tipoBox),
+    isRes ? row('Aportado por', resid, dl) : null,
+    isRes ? row('Categoría original', categoria) : null,
+    row('Notas', notas),
+    h('div', { class: 'dlg-actions' },
+      h('button', { type: 'button', class: 'btn', onclick: () => d.close() }, 'Cancelar'),
+      h('button', { type: 'button', class: 'btn primary', onclick: e => save(e.currentTarget) }, 'Guardar'))));
+  drawOrgSub();
+  d.showModal();
+  d.scrollTop = 0;
+}
+
 /* ---------------- Formulario ---------------- */
 function initForm() {
   const F = S.form;
@@ -463,18 +611,10 @@ function initForm() {
   $('#f-sub-otro').addEventListener('input', e => { F.subtema = e.target.value.trim(); F.touched.subtema = true; autoLater(); });
   $('#f-dx').addEventListener('input', autoLater);
   $('#f-notas').addEventListener('input', autoLater);
+  $('#f-reauto').addEventListener('click', () => { F.touched = {}; F.orgOtro = false; F.subOtro = false; autoClassify(); });
 
   const txt = $('#f-fecha'), pick = $('#f-fecha-pick');
-  txt.addEventListener('input', () => {
-    const d = txt.value.replace(/\D/g, '').slice(0, 8);
-    const out = d.length > 4 ? `${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}-${d.slice(2)}` : d;
-    if (txt.value !== out) txt.value = out;
-    const iso = dispToIso(out);
-    pick.value = iso || '';
-    txt.toggleAttribute('aria-invalid', d.length === 8 && !iso);
-  });
-  pick.addEventListener('change', () => { txt.value = isoToDisp(pick.value); txt.removeAttribute('aria-invalid'); });
-  pick.addEventListener('click', () => { if (matchMedia('(pointer:fine)').matches) { try { pick.showPicker(); } catch { /* sin showPicker */ } } });
+  bindDateMask(txt, pick);
   $('#f-hoy').addEventListener('click', () => { pick.value = todayIso(); txt.value = isoToDisp(pick.value); txt.removeAttribute('aria-invalid'); });
 
   const rut = $('#f-rut');
@@ -532,6 +672,7 @@ function autoClassify() {
   if (!F.touched.organo && F.organo) auto.push(F.organo);
   if (!F.touched.subtema && F.subtema) auto.push(F.subtema);
   hint.textContent = auto.length ? `Clasificado automáticamente: ${auto.join(', ')}. Toca otra opción si no corresponde.` : '';
+  $('#f-reauto').hidden = !(F.touched.organo || F.touched.subtema || F.touched.mes);
   const hasTem = live(S.tem).some(t => t.especialidad === F.esp);
   if (m) mh.textContent = `Según el temario${m.tema.mes ? `, mes ${m.tema.mes}` : ''}: «${m.tema.tema}»` + (F.touched.mes && m.tema.mes && String(m.tema.mes) !== F.mes ? '. Elegiste otro mes.' : '');
   else mh.textContent = !text ? '' : hasTem ? 'Sin coincidencia clara con el temario.' : 'Carga el temario de esta especialidad (en Práctica) para sugerir el mes.';
@@ -801,8 +942,9 @@ function openResDetail(id) {
     ['RUT', x.rut || 'Sin RUT'], ['Especialidad', x.especialidad], ['Examen', x.examen], ['Categoría original', x.categoria],
     ['Órgano', autoTag(e.organo, e.organoAuto)], ['Subtema', autoTag(e.subtema, e.subtemaAuto)],
     ['Mes de rotación', e.mes ? 'Mes ' + e.mes + (e.mesAuto ? ' (según temario)' : '') : ''], ['Tema del temario', e.tema ? e.tema.tema : ''],
-    ['Modalidad', (x.modalidades || []).join(', ')], ['Tipo', x.tipo], ['Práctica', pracTxt(x)], ['Importado de', x.fuente]
+    ['Modalidad', (x.modalidades || []).join(', ')], ['Tipo', x.tipo], ['Notas', x.notas], ['Práctica', pracTxt(x)], ['Importado de', x.fuente]
   ], [
+    h('button', { type: 'button', class: 'btn primary', onclick: () => openEditCase('residentes', id, () => openResDetail(id)) }, 'Editar'),
     x.rut ? h('button', { type: 'button', class: 'btn', onclick: () => copyText(x.rut, 'RUT') }, 'Copiar RUT') : null,
     h('button', { type: 'button', class: 'btn danger', onclick: async () => {
       if (!confirm('¿Eliminar este caso de la lista de residentes?')) return;
@@ -1256,6 +1398,7 @@ function renderSession() {
         : h('button', { type: 'button', class: 'btn primary', onclick: () => { P.revealed = true; renderSession(); } }, 'Mostrar respuesta')),
     h('div', { class: 'psec' },
       h('button', { type: 'button', class: 'link sm', onclick: () => { P.i++; P.revealed = false; renderSession(); } }, 'Saltar'),
+      P.revealed ? h('button', { type: 'button', class: 'link sm', onclick: () => openEditCase(it.col, it.id, renderSession) }, 'Editar caso') : null,
       h('button', { type: 'button', class: 'link sm', onclick: () => { P.active = false; renderSession(); } }, 'Terminar'))));
 }
 async function answer(ok) {
