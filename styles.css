@@ -244,6 +244,10 @@ textarea.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:
 .muted.sep{margin:14px 0 2px;font-size:.88rem}
 ol.steps{margin:0 0 12px;padding-left:20px;font-size:.92rem}
 ol.steps li{margin:4px 0}
+.impsum{margin:12px 0 4px;padding:10px 12px;border-radius:10px;background:var(--sunken);font-size:.9rem}
+.impsum p{margin:3px 0}
+.impsum .warn{color:var(--warn)}
+.rut.none{color:var(--muted);font-weight:500}
 .gate-upd{display:block;margin:18px auto 0;color:var(--muted)}
 .err{min-height:1.2em;margin:0;font-size:.88rem;color:var(--danger)}
 

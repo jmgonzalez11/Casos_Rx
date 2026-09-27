@@ -117,7 +117,7 @@ const TAXONOMIA = {
       ['Intestino (entero-RM)', ['entero', 'crohn', 'ileon', 'ileal', 'intestino delgado', 'enteritis']],
       ['Suelo pélvico', ['suelo pelvico', 'piso pelvico', 'prolapso', 'defeco', 'cistocele', 'rectocele', 'incontinencia']],
       ['Corazón', ['cardiac', 'corazon', 'miocard', 'pericard', 'ventricul', 'realce tardio']],
-      ['Vasos (angio-RM)', ['angio', 'aort', 'arterial', 'vascular']],
+      ['Vasos (angio-RM)', ['angiorm', 'angio rm', 'angio-rm', 'aort', 'arterial', 'vascular']],
       ['Bazo y peritoneo', L(KW_BAZO, ['periton', 'mesenter'])]
     ],
     subtemas: [
@@ -216,7 +216,7 @@ const TAXONOMIA = {
       ['Faringe, laringe y cavidad oral', ['faring', 'laring', 'nasofaring', 'orofaring', 'hipofaring', 'cuerdas vocales', 'glotis', 'glotic', 'amigdal', 'epiglot', 'cavidad oral', 'lengua']],
       ['Tiroides y paratiroides', ['tiroid', 'paratiroid', 'bocio']],
       ['Columna y médula', ['columna', 'medula', 'medular', 'raquid', 'vertebr', 'disco', 'discal', 'hernia del nucleo', 'cervical', 'dorsal', 'lumbar', 'sacro', 'cauda equina', 'cono medular', 'mielopatia', 'mielitis', 'siringomielia', 'espondil', 'radicul']],
-      ['Vasos intra y extracraneales', ['aneurism', 'carotid', 'vertebral', 'basilar', 'poligono de willis', 'arteria cerebral', 'mav', 'malformacion arteriovenosa', 'fistula dural', 'seno venoso', 'trombosis venosa cerebral', 'diseccion arterial', 'moyamoya', 'angio']],
+      ['Vasos intra y extracraneales', ['aneurism', 'carotid', 'vertebral', 'basilar', 'poligono de willis', 'arteria cerebral', 'mav', 'malformacion arteriovenosa', 'fistula dural', 'seno venoso', 'trombosis venosa cerebral', 'diseccion arterial', 'moyamoya', 'angiotc', 'angio tc', 'angio-tc', 'angiotac', 'angio tac', 'angiorm', 'angio rm', 'angio-rm', 'angiografia']],
       ['Nervios craneales y plexos', ['nervio craneal', 'par craneal', 'trigemin', 'nervio facial', 'plexo braquial', 'plexo', 'neuralgia']]
     ],
     subtemas: [
@@ -410,10 +410,11 @@ function _taxFor(esp) {
   if (!_taxIdx[esp]) _taxIdx[esp] = { org: _buildIdx(TAXONOMIA[esp].organos), sub: _buildIdx(TAXONOMIA[esp].subtemas) };
   return _taxIdx[esp];
 }
-function _best(idx, text) {
+function _best(idx, text, allowed) {
   let t = ' ' + text + ' ';
   const score = {};
   for (const { re, label, w } of idx) {
+    if (allowed && !allowed.includes(label)) continue;
     let hit = false;
     t = t.replace(re, m => { hit = true; return '\u0001'.repeat(m.length); });
     if (hit) score[label] = (score[label] || 0) + w;
@@ -423,11 +424,11 @@ function _best(idx, text) {
   return best;
 }
 /** Sugiere órgano y subtema para un texto (diagnóstico o tema del temario) dentro de una especialidad. */
-function classifyText(esp, text) {
+function classifyText(esp, text, allowedSub) {
   const ix = _taxFor(esp);
   const t = String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (!ix || !t.trim()) return { organo: '', subtema: '' };
-  return { organo: _best(ix.org, t), subtema: _best(ix.sub, t) };
+  return { organo: _best(ix.org, t), subtema: _best(ix.sub, t, allowedSub) };
 }
 const organosDe = esp => (TAXONOMIA[esp] ? TAXONOMIA[esp].organos.map(o => o[0]) : []);
 const subtemasDe = esp => (TAXONOMIA[esp] ? TAXONOMIA[esp].subtemas.map(o => o[0]) : []);

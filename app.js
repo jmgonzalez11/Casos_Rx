@@ -7,7 +7,7 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
-const APP_VERSION = '2.3';
+const APP_VERSION = '2.4';
 
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
@@ -123,7 +123,8 @@ function toIso(v) {
   }
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (iso) return dispToIso(`${iso[3]}-${iso[2]}-${iso[1]}`) || '';
-  return dispToIso(s.split(/[\sT]+/)[0]) || '';
+  const first = s.split(/[\sT]+/)[0], dg = first.replace(/\D/g, '');
+  return dispToIso(first) || (dg.length === 8 ? dispToIso(`${dg.slice(0, 2)}-${dg.slice(2, 4)}-${dg.slice(4)}`) : '') || '';
 }
 function hhmm(ts) {
   const d = new Date(ts), now = new Date();
@@ -286,7 +287,8 @@ function eff(x) {
   const c = _eff.get(x.id); if (c && c.key === key) return c.v;
   const text = [x.diagnostico, x.notas].filter(Boolean).join('. ');
   const cls = (!x.organo || !x.subtema) ? classifyText(x.especialidad, text) : { organo: '', subtema: '' };
-  const organo = x.organo || cls.organo || '', subtema = x.subtema || cls.subtema || '';
+  const byExam = !x.organo && !cls.organo && x.examen ? classifyText(x.especialidad, x.examen) : null;
+  const organo = x.organo || cls.organo || (byExam && byExam.organo) || '', subtema = x.subtema || cls.subtema || '';
   const m = matchTema(x.especialidad, text, organo, subtema);
   const v = {
     organo, subtema, organoAuto: !x.organo && !!organo, subtemaAuto: !x.subtema && !!subtema,
@@ -628,7 +630,8 @@ function matchQ(x, q, extra) {
   });
 }
 const extraOf = (e, more = '') => `${e.organo} ${e.subtema} ${mesLabel(e)} ${more}`;
-const byFecha = dir => (a, b) => ((a.fecha || '0000') < (b.fecha || '0000') ? -1 : (a.fecha || '0000') > (b.fecha || '0000') ? 1 : 0) * dir
+const fKey = x => x.fecha || x.fechaEntrega || '0000';
+const byFecha = dir => (a, b) => (fKey(a) < fKey(b) ? -1 : fKey(a) > fKey(b) ? 1 : 0) * dir
   || ((a.createdAt || 0) - (b.createdAt || 0)) * dir;
 
 function renderEspBar(el, f, items, rerender) {
@@ -763,10 +766,10 @@ function renderRes() {
   const f = S.fr, all = live(S.res);
   renderEspBar($('#r-esp'), f, all, renderRes);
   const names = [...new Set(all.map(x => x.residente).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-  f.residente = fillSelect($('#r-resid'), 'Residentes', names, f.residente);
+  f.residente = fillSelect($('#r-resid'), 'Aportado por', names, f.residente);
   const { list, E } = facetFilter(all, f, { org: '#r-org', sub: '#r-sub', mes: '#r-mes' });
   const mine = new Set(live(S.casos).map(x => rutClean(x.rut)));
-  const arr = list.filter(x => (!f.residente || x.residente === f.residente) && matchQ(x, f.q, extraOf(E.get(x.id), x.residente))).sort(byFecha(f.dir));
+  const arr = list.filter(x => (!f.residente || x.residente === f.residente) && matchQ(x, f.q, extraOf(E.get(x.id), `${x.residente || ''} ${x.examen || ''} ${x.categoria || ''} ${isoToDisp(x.fechaEntrega || '')}`))).sort(byFecha(f.dir));
   setActiveCount($('#r-nf'), [f.residente, f.organo, f.subtema, f.mes].filter(Boolean).length);
   $('#r-count').textContent = arr.length ? `${arr.length} caso${arr.length > 1 ? 's' : ''}` : '';
   $('#r-orden').textContent = f.dir < 0 ? 'Más recientes primero' : 'Más antiguos primero';
@@ -781,11 +784,11 @@ function renderRes() {
       h('div', { class: 'lead' }, h('span', { class: 'num' }, String(i + 1))),
       h('button', { type: 'button', class: 'rbody', onclick: () => openResDetail(x.id) },
         h('div', { class: 'l1' },
-          h('span', { class: 'date' }, x.fecha ? isoToDisp(x.fecha) : 'Sin fecha'),
-          h('span', { class: 'rut' }, x.rut),
+          h('span', { class: 'date' }, x.fecha ? isoToDisp(x.fecha) : x.fechaEntrega ? 'Mostrado ' + isoToDisp(x.fechaEntrega) : 'Sin fecha'),
+          h('span', { class: 'rut' + (x.rut ? '' : ' none') }, x.rut || 'Sin RUT'),
           (x.modalidades || []).length ? h('span', { class: 'mods' }, x.modalidades.join(' + ')) : null,
           x.tipo ? h('span', { class: 'tipo' }, x.tipo) : null,
-          mine.has(rutClean(x.rut)) ? h('span', { class: 'badge' }, 'En tus casos') : null),
+          x.rut && mine.has(rutClean(x.rut)) ? h('span', { class: 'badge' }, 'En tus casos') : null),
         h('div', { class: 'dx' }, x.diagnostico || 'Sin diagnóstico'),
         h('div', { class: 'meta' }, [x.especialidad, e.organo, e.subtema, mesLabel(e), x.residente].filter(Boolean).join(', '))));
   }));
@@ -794,12 +797,13 @@ function openResDetail(id) {
   const x = S.res.get(id); if (!x) return;
   const e = eff(x);
   openDetail(x.diagnostico || 'Caso sin diagnóstico', [
-    ['Residente', x.residente], ['Fecha del estudio', isoToDisp(x.fecha)], ['RUT', x.rut], ['Especialidad', x.especialidad],
+    ['Aportado por', x.residente], ['Fecha del estudio', isoToDisp(x.fecha)], ['Fecha en que se mostró', isoToDisp(x.fechaEntrega || '')],
+    ['RUT', x.rut || 'Sin RUT'], ['Especialidad', x.especialidad], ['Examen', x.examen], ['Categoría original', x.categoria],
     ['Órgano', autoTag(e.organo, e.organoAuto)], ['Subtema', autoTag(e.subtema, e.subtemaAuto)],
     ['Mes de rotación', e.mes ? 'Mes ' + e.mes + (e.mesAuto ? ' (según temario)' : '') : ''], ['Tema del temario', e.tema ? e.tema.tema : ''],
     ['Modalidad', (x.modalidades || []).join(', ')], ['Tipo', x.tipo], ['Práctica', pracTxt(x)], ['Importado de', x.fuente]
   ], [
-    h('button', { type: 'button', class: 'btn', onclick: () => copyText(x.rut, 'RUT') }, 'Copiar RUT'),
+    x.rut ? h('button', { type: 'button', class: 'btn', onclick: () => copyText(x.rut, 'RUT') }, 'Copiar RUT') : null,
     h('button', { type: 'button', class: 'btn danger', onclick: async () => {
       if (!confirm('¿Eliminar este caso de la lista de residentes?')) return;
       await saveRecord('residentes', { id, deleted: true });
@@ -827,16 +831,17 @@ function normEsp(v) {
 }
 const MOD_SYN = [
   ['Eco Doppler', ['doppler']], ['PET-TC', ['pet']], ['Mamografía', ['mamo', 'mamografia', 'tomosintesis']],
-  ['Medicina nuclear', ['nuclear', 'spect', 'cintigrafia', 'gammagrafia', 'mn']], ['Angiografía', ['angiografia', 'dsa']],
-  ['Fluoroscopía', ['fluoro', 'radioscopia', 'fluoroscopia']], ['RM', ['rm', 'mr', 'rnm', 'resonancia', 'mri']],
-  ['TC', ['tc', 'tac', 'ct', 'scanner', 'angiotc', 'angio-tc']], ['Eco', ['eco', 'us', 'ecografia', 'ultrasonido']],
+  ['Medicina nuclear', ['nuclear', 'spect', 'cintigrafia', 'gammagrafia', 'mn']], ['Angiografía', ['angiografia', 'dsa', 'asd']],
+  ['Fluoroscopía', ['fluoro', 'radioscopia', 'fluoroscopia']], ['RM', ['rm', 'mr', 'rnm', 'resonancia', 'mri', 'angiorm', 'angio-rm']],
+  ['TC', ['tc', 'tac', 'ct', 'scanner', 'angiotc', 'angio-tc', 'angiotac', 'angio-tac', 'tomografia']], ['Eco', ['eco', 'us', 'ecografia', 'ultrasonido']],
   ['Rx', ['rx', 'radiografia', 'placa']]
 ];
-function normMods(v) {
+function normMods(v, strict = false) {       // strict: solo modalidades reconocidas (para textos como «AngioTC cerebro y cuello»)
   const s = String(v ?? '').trim(); if (!s) return [];
   const out = [];
   for (const tok of s.split(/[/,+;&]|\s+y\s+|\s+-\s+/).map(t => t.trim()).filter(Boolean)) {
     const hit = MOD_SYN.find(([, pats]) => pats.some(p => patHit(tok, p)));
+    if (!hit && strict) continue;
     const val = hit ? hit[0] : tok;
     if (!out.includes(val)) out.push(val);
   }
@@ -847,25 +852,77 @@ function normTipo(v) {
   if (/(^|[^a-z])fu([^a-z]|$)|follow/.test(n)) return 'FU';
   if (n.includes('entrega')) return 'Entrega';
   if (n.includes('seguim')) return 'Seguimiento';
+  if (/^otr[oa]s?$/.test(n)) return 'Otro';
   return s;
 }
-const dedupKey = x => `${rutClean(x.rut)}|${x.fecha}|${norm(x.diagnostico)}`;
+const dedupKey = x => `${rutClean(x.rut)}|${x.fecha || x.fechaEntrega || ''}|${norm(x.diagnostico)}`;
+
+/* Especialidad a partir de la planilla. «Cuerpo» agrupa TC, RM y ecografía de cuerpo: decide la primera modalidad escrita
+   (ECO → ecografía gris o Doppler, RM → MR de cuerpo, TAC → TC de cuerpo). */
+const DOPPLER_RE = /doppler|tvp|trombosis venosa|trombosis de la vena|flujo|fistula arteriovenosa|(^|[^a-z])fav([^a-z]|$)|insuficiencia venosa|varice|pseudoaneurism|carotid|trasplante|(^|[^a-z])tx([^a-z]|$)|torsion|(^|[^a-z])porta([^a-z]|$)|portal|estenosis arterial|arteria renal/;
+const ecoKind = (mods, text) => (mods.includes('Eco Doppler') || DOPPLER_RE.test(norm(text)) ? 'Ecografía Doppler' : 'Ecografía gris');
+function resolveEsp(raw, mods, text) {
+  const n = norm(raw);
+  if (!n) return { esp: '' };
+  if (/cuerpo|body/.test(n)) {
+    const first = mods[0];
+    if (first === 'Eco' || first === 'Eco Doppler') return { esp: ecoKind(mods, text) };
+    if (first === 'RM') return { esp: 'MR de cuerpo' };
+    if (first === 'TC') return { esp: 'TC de cuerpo' };
+    return { esp: 'TC de cuerpo', review: true };           // «Cuerpo» con RX u otra modalidad: revisar
+  }
+  const e = normEsp(raw);
+  if (e === 'Ecografía gris' && n !== 'ecografia gris') return { esp: ecoKind(mods, text) };   // «US», «ECO»…
+  return { esp: e };
+}
+/* Categoría escrita por el grupo (p. ej. «Vascular», «Tumoral/infeccioso») → subtema de la taxonomía. */
+const CAT_HINTS = [
+  [/vascul/, ['Vascular isquémico', 'Hemorragia intracraneal', 'Aneurismas y malformaciones vasculares', 'Trombosis venosa cerebral', 'Vascular']],
+  [/tumor|oncol|neopla/, ['Tumores intraaxiales', 'Tumores extraaxiales y selares', 'Cabeza y cuello oncológico', 'Lesión focal y masas', 'Tumores óseos', 'Tumores de partes blandas', 'Tumores pediátricos', 'Neoplasias', 'Tumores y lesiones óseas']],
+  [/trauma/, ['Trauma (TEC y columna)', 'Trauma', 'Trauma y fracturas']],
+  [/infecc|infecci/, ['Infección', 'Inflamatorio e infeccioso']],
+  [/deposito|metabol|toxic/, ['Metabólico y tóxico', 'Metabólico y depósito', 'Difuso y depósito']],
+  [/desmiel|sustancia blanca/, ['Sustancia blanca y desmielinizantes']],
+  [/congenit|malforma|desarrollo/, ['Congénito y del desarrollo', 'Congénito y malformaciones', 'Pediátrico y del desarrollo']],
+  [/degenera/, ['Neurodegenerativo y demencias', 'Columna degenerativa', 'Artrosis y degenerativo']],
+  [/epilep/, ['Epilepsia']], [/hemorr|sangr/, ['Hemorragia intracraneal', 'Hemorragia digestiva']],
+  [/inflam|autoinm/, ['Inflamatorio y autoinmune', 'Artropatías inflamatorias', 'Inflamatorio e infeccioso']]
+];
+const CYC_ORG = ['Órbita', 'Hueso temporal y base de cráneo', 'Cavidades paranasales y fosas nasales', 'Cuello: espacios profundos y ganglios', 'Faringe, laringe y cavidad oral', 'Tiroides y paratiroides'];
+function subFromCategoria(esp, cat, text) {
+  const allowed = subtemasDe(esp), n = norm(cat), cands = [];
+  if (!allowed.length || !n) return '';
+  for (const [re, labels] of CAT_HINTS) if (re.test(n)) for (const l of labels) if (allowed.includes(l) && !cands.includes(l)) cands.push(l);
+  for (const w of n.split(/[^a-z]+/)) if (w.length >= 5) for (const l of allowed) if (norm(l).includes(w.slice(0, 5)) && !cands.includes(l)) cands.push(l);
+  if (cands.length <= 1) return cands[0] || '';
+  const c = classifyText(esp, text, cands);
+  if (c.subtema) return c.subtema;
+  const org = classifyText(esp, text).organo;       // sin palabra clave: decide la región
+  if (cands.includes('Cabeza y cuello oncológico') && CYC_ORG.includes(org)) return 'Cabeza y cuello oncológico';
+  if (cands.includes('Tumores extraaxiales y selares') && org === 'Hipófisis y región selar') return 'Tumores extraaxiales y selares';
+  return cands[0];
+}
 
 const IMPORT_FIELDS = [
   { k: 'rut', label: 'RUT', pats: ['rut', 'run'] },
-  { k: 'fecha', label: 'Fecha de estudio', pats: ['fecha'] },
+  { k: 'fecha', label: 'Fecha del estudio', pats: ['estudio', 'fecha examen', 'fecha del examen', 'realizado'], weak: ['fecha'] },
+  { k: 'fechaEntrega', label: 'Fecha en que se mostró', pats: ['fecha entrega', 'fecha de entrega', 'presentacion', 'mostrado'], weak: ['fecha'] },
   { k: 'tipo', label: 'Entrega o FU', pats: ['entrega', 'fu', 'follow', 'tipo'] },
   { k: 'especialidad', label: 'Especialidad', pats: ['especialidad', 'rotacion', 'seccion', 'area'] },
   { k: 'diagnostico', label: 'Diagnóstico', pats: ['diagnostico', 'dx', 'hallazgo'] },
   { k: 'modalidad', label: 'Modalidad', pats: ['modalidad', 'modality', 'tecnica'] },
-  { k: 'residente', label: 'Residente', pats: ['residente', 'becado', 'nombre', 'presenta', 'presentador'] }
+  { k: 'examen', label: 'Examen', pats: ['examen', 'protocolo'] },
+  { k: 'categoria', label: 'Categoría', pats: ['categoria', 'subtema', 'grupo'] },
+  { k: 'residente', label: 'Aportado por', pats: ['residente', 'becado', 'presenta', 'presentador'] }
 ];
-const headerField = hd => IMPORT_FIELDS.find(f => f.pats.some(p => patHit(hd, p)))?.k || null;
+const headerField = hd => IMPORT_FIELDS.find(f => [...f.pats, ...(f.weak || [])].some(p => patHit(hd, p)))?.k || null;
 function guessMap(headers) {
   const used = new Set(), map = {};
-  for (const f of IMPORT_FIELDS) {
-    const i = headers.findIndex((hd, idx) => hd && !used.has(idx) && f.pats.some(p => patHit(hd, p)));
-    map[f.k] = i; if (i >= 0) used.add(i);
+  for (const f of IMPORT_FIELDS) map[f.k] = -1;
+  for (const pass of ['pats', 'weak']) for (const f of IMPORT_FIELDS) {
+    if (map[f.k] >= 0 || !f[pass]) continue;
+    const i = headers.findIndex((hd, idx) => hd && !used.has(idx) && f[pass].some(p => patHit(hd, p)));
+    if (i >= 0) { map[f.k] = i; used.add(i); }
   }
   return map;
 }
@@ -879,7 +936,122 @@ function prepSheet(s) {
   const headers = s.rows[best].map(c => String(c ?? '').trim());
   const map = guessMap(headers);
   const rows = s.rows.slice(best + 1).filter(r => r && r.some(c => String(c ?? '').trim() !== ''));
-  return { name: s.name, headers, map, rows, include: map.rut >= 0 && rows.length > 0 };
+  const fromName = [s.name, S.importFile].map(t => normEsp(String(t || '').replace(/[_.-]+/g, ' '))).find(e => ESPECIALIDADES.includes(e)) || '';
+  return { name: s.name, headers, map, rows, defEsp: fromName, include: map.diagnostico >= 0 && rows.length > 0,
+    patientName: headers.findIndex(hd => /^(nombre|paciente|nombre paciente|nombre del paciente)$/.test(norm(hd))) };
+}
+function buildImport() {
+  const existing = new Set(live(S.res).map(dedupKey));
+  const out = { list: [], dup: 0, empty: 0, noRut: 0, skippedNoRut: 0, review: 0, badDates: [], byEsp: {} };
+  for (const s of S.importSheets) {
+    if (!s.include) continue;
+    const g = (row, k) => { const m = s.map[k]; return m === 'sheet' ? s.name : m >= 0 ? row[m] : ''; };
+    const str = (row, k) => String(g(row, k) ?? '').trim();
+    for (const row of s.rows) {
+      const rutRaw = str(row, 'rut'), dx = str(row, 'diagnostico'), hasRut = rutClean(rutRaw).length >= 2;
+      if (!dx && !hasRut) { out.empty++; continue; }
+      if (!hasRut && !S.importNoRut) { out.skippedNoRut++; continue; }
+      const examen = str(row, 'examen');
+      let mods = normMods(g(row, 'modalidad'));
+      if (!mods.length && examen) mods = normMods(examen, true);
+      const r = resolveEsp(s.map.especialidad >= 0 ? str(row, 'especialidad') || s.defEsp : s.defEsp, mods, `${dx} ${examen}`);
+      if (r.review) out.review++;
+      const date = k => { const v = g(row, k), iso = toIso(v); if (!iso && String(v ?? '').trim()) out.badDates.push(String(v).trim()); return iso; };
+      const categoria = str(row, 'categoria');
+      const p = {
+        id: 'r_' + crypto.randomUUID(), deleted: false, fuente: S.importFile,
+        residente: str(row, 'residente'), tipo: normTipo(g(row, 'tipo')), modalidades: mods,
+        fecha: date('fecha'), fechaEntrega: date('fechaEntrega'),
+        rut: !hasRut ? '' : rutValid(rutRaw) ? rutFormat(rutRaw) : rutRaw,
+        especialidad: r.esp, diagnostico: dx, examen, categoria,
+        subtema: categoria ? subFromCategoria(r.esp, categoria, `${dx} ${examen}`) : ''
+      };
+      const k = dedupKey(p);
+      if (existing.has(k)) { out.dup++; continue; }
+      existing.add(k); out.list.push(p);
+      if (!hasRut) out.noRut++;
+      out.byEsp[p.especialidad || 'Sin especialidad'] = (out.byEsp[p.especialidad || 'Sin especialidad'] || 0) + 1;
+    }
+  }
+  return out;
+}
+function importSummary() {
+  const r = buildImport(), box = $('#imp-sum');
+  if (!box) return r;
+  const esp = Object.entries(r.byEsp).sort((a, b) => b[1] - a[1]).map(([e, n]) => `${e} ${n}`).join(', ');
+  box.replaceChildren(...[
+    h('p', {}, h('strong', {}, `Se importarán ${r.list.length} caso${r.list.length === 1 ? '' : 's'}`), esp ? `: ${esp}.` : '.'),
+    r.review ? h('p', { class: 'warn' }, `${r.review} caso${r.review > 1 ? 's' : ''} de «Cuerpo» con Rx u otra modalidad quedaron en TC de cuerpo: revísalos.`) : null,
+    r.noRut ? h('p', {}, `${r.noRut} sin RUT (quedan marcados «Sin RUT»).`) : null,
+    r.skippedNoRut ? h('p', {}, `${r.skippedNoRut} filas sin RUT se omitirán.`) : null,
+    r.dup ? h('p', {}, `${r.dup} ya estaban importados y se omiten.`) : null,
+    r.empty ? h('p', {}, `${r.empty} filas sin diagnóstico ni RUT se omiten.`) : null,
+    r.badDates.length ? h('p', { class: 'warn' }, `Fechas que no son válidas y quedarán vacías: ${[...new Set(r.badDates)].slice(0, 5).join(', ')}.`) : null].filter(Boolean));
+  $('#imp-go').disabled = !r.list.length;
+  return r;
+}
+
+async function onImportFile(file) {
+  try {
+    const n = file.name.toLowerCase();
+    let sheets;
+    if (/\.xls[xm]$/.test(n)) sheets = await readXlsx(await file.arrayBuffer());
+    else if (/\.(csv|tsv|txt)$/.test(n)) sheets = [{ name: file.name.replace(/\.[^.]+$/, ''), rows: parseCSV(await file.text()) }];
+    else throw new Error('Usa un archivo .xlsx o .csv. Si es un .xls antiguo, guárdalo como .xlsx.');
+    S.importFile = file.name;
+    const prepared = sheets.map(prepSheet).filter(Boolean);
+    if (!prepared.length) throw new Error('No encontré encabezados reconocibles (RUT, Fecha, Diagnóstico…)');
+    S.importSheets = prepared; S.importNoRut = true;
+    openImportDialog();
+  } catch (e) { toast(e.message, true); }
+  finally { $('#r-file').value = ''; }
+}
+function openImportDialog() {
+  const d = $('#impDlg'), multi = S.importSheets.length > 1;
+  const blocks = S.importSheets.map(s => {
+    const inc = h('input', { type: 'checkbox' }); inc.checked = s.include;
+    inc.addEventListener('change', () => { s.include = inc.checked; importSummary(); });
+    if (multi && s.map.residente < 0) s.map.residente = 'sheet';
+    const rows = IMPORT_FIELDS.map(f => {
+      const sel = h('select', { 'aria-label': `${f.label} en ${s.name}` },
+        h('option', { value: '-1' }, 'No usar'),
+        f.k === 'residente' ? h('option', { value: 'sheet' }, 'Nombre de la hoja') : null,
+        ...s.headers.map((hd, i) => (hd && i !== s.patientName ? h('option', { value: String(i) }, hd) : null)));
+      sel.value = String(s.map[f.k]);
+      sel.addEventListener('change', () => { s.map[f.k] = sel.value === 'sheet' ? 'sheet' : Number(sel.value); importSummary(); });
+      return h('label', { class: 'maprow' }, h('span', {}, f.label), sel);
+    });
+    const espSel = h('select', { 'aria-label': `Especialidad por defecto en ${s.name}` }, h('option', { value: '' }, 'Ninguna'), ...ESPECIALIDADES.map(e => h('option', { value: e }, e)));
+    espSel.value = s.defEsp;
+    espSel.addEventListener('change', () => { s.defEsp = espSel.value; importSummary(); });
+    rows.push(h('label', { class: 'maprow' }, h('span', {}, 'Especialidad si falta'), espSel));
+    return h('fieldset', { class: 'impsheet' },
+      h('legend', {}, h('label', { class: 'check' }, inc, ` ${s.name} (${s.rows.length} fila${s.rows.length === 1 ? '' : 's'})`)),
+      h('div', { class: 'mapgrid' }, ...rows),
+      s.patientName >= 0 ? h('p', { class: 'hint' }, `La columna «${s.headers[s.patientName]}» (nombre del paciente) nunca se importa.`) : null);
+  });
+  const nr = h('input', { type: 'checkbox' }); nr.checked = S.importNoRut;
+  nr.addEventListener('change', () => { S.importNoRut = nr.checked; importSummary(); });
+  d.replaceChildren(h('div', { class: 'dlg' },
+    h('h2', {}, 'Importar casos'),
+    h('p', { class: 'muted' }, `${S.importFile}: revisa qué columna corresponde a cada dato. Lo que quede en «No usar» no se importa. «Cuerpo» se reparte según la primera modalidad (ECO → Ecografía gris o Doppler, RM → MR de cuerpo, TAC → TC de cuerpo). La categoría, si existe, define el subtema.`),
+    ...blocks,
+    h('label', { class: 'check' }, nr, ' Importar también filas sin RUT'),
+    h('div', { class: 'impsum', id: 'imp-sum' }),
+    h('div', { class: 'dlg-actions' },
+      h('button', { type: 'button', class: 'btn', onclick: () => d.close() }, 'Cancelar'),
+      h('button', { type: 'button', class: 'btn primary', id: 'imp-go', onclick: e => doImport(e.currentTarget) }, 'Importar'))));
+  d.showModal();
+  importSummary();
+}
+async function doImport(btn) {
+  const r = buildImport();
+  busy(btn, true, 'Cifrando…');
+  try { if (r.list.length) await saveMany('residentes', r.list); }
+  catch (e) { toast('No se pudo importar: ' + e.message, true); return; }
+  finally { busy(btn, false); }
+  $('#impDlg').close(); S.importSheets = null; renderRes();
+  toast(`${r.list.length} caso${r.list.length === 1 ? '' : 's'} importado${r.list.length === 1 ? '' : 's'}${r.dup ? `, ${r.dup} ya existían` : ''}${r.review ? `, ${r.review} para revisar` : ''}`);
 }
 
 /* ---------- Lector de .xlsx sin dependencias (ZIP + XML) ---------- */
@@ -965,77 +1137,6 @@ function parseCSV(text) {
   return rows;
 }
 
-async function onImportFile(file) {
-  try {
-    const n = file.name.toLowerCase();
-    let sheets;
-    if (/\.xls[xm]$/.test(n)) sheets = await readXlsx(await file.arrayBuffer());
-    else if (/\.(csv|tsv|txt)$/.test(n)) sheets = [{ name: file.name.replace(/\.[^.]+$/, ''), rows: parseCSV(await file.text()) }];
-    else throw new Error('Usa un archivo .xlsx o .csv. Si es un .xls antiguo, guárdalo como .xlsx.');
-    const prepared = sheets.map(prepSheet).filter(Boolean);
-    if (!prepared.length) throw new Error('No encontré encabezados reconocibles (RUT, Fecha, Diagnóstico…)');
-    S.importSheets = prepared; S.importFile = file.name;
-    openImportDialog();
-  } catch (e) { toast(e.message, true); }
-  finally { $('#r-file').value = ''; }
-}
-function openImportDialog() {
-  const d = $('#impDlg'), multi = S.importSheets.length > 1;
-  const blocks = S.importSheets.map(s => {
-    const inc = h('input', { type: 'checkbox' }); inc.checked = s.include;
-    inc.addEventListener('change', () => { s.include = inc.checked; });
-    if (multi && s.map.residente < 0) s.map.residente = 'sheet';
-    const rows = IMPORT_FIELDS.map(f => {
-      const sel = h('select', { 'aria-label': `${f.label} en ${s.name}` },
-        h('option', { value: '-1' }, 'No usar'),
-        f.k === 'residente' ? h('option', { value: 'sheet' }, 'Nombre de la hoja') : null,
-        ...s.headers.map((hd, i) => (hd ? h('option', { value: String(i) }, hd) : null)));
-      sel.value = String(s.map[f.k]);
-      sel.addEventListener('change', () => { s.map[f.k] = sel.value === 'sheet' ? 'sheet' : Number(sel.value); });
-      return h('label', { class: 'maprow' }, h('span', {}, f.label), sel);
-    });
-    return h('fieldset', { class: 'impsheet' },
-      h('legend', {}, h('label', { class: 'check' }, inc, ` ${s.name} (${s.rows.length} fila${s.rows.length === 1 ? '' : 's'})`)),
-      h('div', { class: 'mapgrid' }, ...rows));
-  });
-  d.replaceChildren(h('div', { class: 'dlg' },
-    h('h2', {}, 'Importar casos de residentes'),
-    h('p', { class: 'muted' }, `${S.importFile}: revisa qué columna corresponde a cada dato. Lo que quede en «No usar» (como Aporte) no se importa, y se omiten los casos ya importados (mismo RUT, fecha y diagnóstico).`),
-    ...blocks,
-    h('div', { class: 'dlg-actions' },
-      h('button', { type: 'button', class: 'btn', onclick: () => d.close() }, 'Cancelar'),
-      h('button', { type: 'button', class: 'btn primary', onclick: e => doImport(e.currentTarget) }, 'Importar'))));
-  d.showModal();
-}
-async function doImport(btn) {
-  const existing = new Set(live(S.res).map(dedupKey));
-  const list = []; let dup = 0, noRut = 0;
-  for (const s of S.importSheets) {
-    if (!s.include) continue;
-    const g = (row, k) => { const m = s.map[k]; return m === 'sheet' ? s.name : m >= 0 ? row[m] : ''; };
-    for (const row of s.rows) {
-      const rutRaw = String(g(row, 'rut') ?? '').trim();
-      if (rutClean(rutRaw).length < 2) { noRut++; continue; }
-      const p = {
-        id: 'r_' + crypto.randomUUID(), deleted: false, fuente: S.importFile,
-        residente: String(g(row, 'residente') ?? '').trim(),
-        tipo: normTipo(g(row, 'tipo')), modalidades: normMods(g(row, 'modalidad')),
-        fecha: toIso(g(row, 'fecha')), rut: rutValid(rutRaw) ? rutFormat(rutRaw) : rutRaw,
-        especialidad: normEsp(g(row, 'especialidad')), diagnostico: String(g(row, 'diagnostico') ?? '').trim()
-      };
-      const k = dedupKey(p);
-      if (existing.has(k)) { dup++; continue; }
-      existing.add(k); list.push(p);
-    }
-  }
-  busy(btn, true, 'Cifrando…');
-  try { if (list.length) await saveMany('residentes', list); }
-  catch (e) { toast('No se pudo importar: ' + e.message, true); return; }
-  finally { busy(btn, false); }
-  $('#impDlg').close(); S.importSheets = null; renderRes();
-  toast(`${list.length} caso${list.length === 1 ? '' : 's'} importado${list.length === 1 ? '' : 's'}${dup ? `, ${dup} ya existían` : ''}${noRut ? `, ${noRut} filas sin RUT` : ''}`);
-}
-
 /* ---------------- Exportación (CSV para Excel) ---------------- */
 function csvCell(v) {
   let s = String(v ?? '');
@@ -1060,8 +1161,8 @@ function exportRes() {
   if (!confirm('El CSV quedará sin cifrar en este dispositivo. ¿Continuar?')) return;
   const arr = live(S.res).sort(byFecha(1));
   downloadCSV(`casos_residentes_${todayIso()}.csv`,
-    ['Residente', 'Entrega o FU', 'Modalidad', 'Fecha de estudio', 'RUT', 'Especialidad', 'Órgano', 'Subtema', 'Mes', 'Diagnóstico'],
-    arr.map(x => { const e = eff(x); return [x.residente, x.tipo, (x.modalidades || []).join(' + '), isoToDisp(x.fecha), x.rut, x.especialidad, e.organo, e.subtema, e.mes ? 'Mes ' + e.mes : '', x.diagnostico]; }));
+    ['Aportado por', 'Entrega o FU', 'Modalidad', 'Examen', 'Fecha de estudio', 'Fecha mostrado', 'RUT', 'Especialidad', 'Categoría', 'Órgano', 'Subtema', 'Mes', 'Diagnóstico'],
+    arr.map(x => { const e = eff(x); return [x.residente, x.tipo, (x.modalidades || []).join(' + '), x.examen, isoToDisp(x.fecha || ''), isoToDisp(x.fechaEntrega || ''), x.rut, x.especialidad, x.categoria, e.organo, e.subtema, e.mes ? 'Mes ' + e.mes : '', x.diagnostico]; }));
 }
 function exportTemario() {
   const arr = live(S.tem).sort(temSort);
@@ -1131,11 +1232,11 @@ function renderSession() {
   if (!it) { P.active = false; return renderSummary(); }
   const e = eff(x), hide = S.fp.hide;
   const rows = [
-    ['Fecha', isoToDisp(x.fecha)],
-    ['RUT', h('span', { class: 'rutline' }, x.rut, ' ', h('button', { type: 'button', class: 'link sm', onclick: () => copyText(x.rut, 'RUT') }, 'Copiar'))],
-    ['Modalidad', (x.modalidades || []).join(' + ')], ['Tipo', x.tipo], ['Especialidad', x.especialidad],
+    ['Fecha', x.fecha ? isoToDisp(x.fecha) : x.fechaEntrega ? `Sin fecha de estudio (mostrado ${isoToDisp(x.fechaEntrega)})` : 'Sin fecha'],
+    ['RUT', x.rut ? h('span', { class: 'rutline' }, x.rut, ' ', h('button', { type: 'button', class: 'link sm', onclick: () => copyText(x.rut, 'RUT') }, 'Copiar')) : 'Sin RUT'],
+    ['Modalidad', (x.modalidades || []).join(' + ')], ['Examen', x.examen], ['Tipo', x.tipo], ['Especialidad', x.especialidad],
     ['Órgano', hide && !P.revealed ? '' : e.organo], ['Subtema', hide && !P.revealed ? '' : e.subtema],
-    ['Residente', it.col === 'residentes' ? x.residente : '']
+    ['Aportado por', it.col === 'residentes' ? x.residente : '']
   ].filter(r => r[1]);
   box.replaceChildren(h('div', { class: 'pcard', style: { '--esp': espColor(x.especialidad) } },
     h('div', { class: 'pprog' }, h('span', {}, `Caso ${P.i + 1} de ${P.deck.length}`), h('span', { class: 'pscore' }, `${P.ok} bien, ${P.fail} por repasar`)),
@@ -1175,7 +1276,7 @@ function renderSummary() {
     h('h2', {}, 'Práctica terminada'),
     h('p', { class: 'pbig' }, done ? `${P.ok} de ${done} (${Math.round(100 * P.ok / done)} %)` : 'No respondiste casos.'),
     P.failed.length ? h('div', {}, h('div', { class: 'lbl' }, 'Para repasar'),
-      h('ul', { class: 'plain' }, ...P.failed.map(it => { const x = mapOf(it.col).get(it.id); return x ? h('li', {}, `${isoToDisp(x.fecha)}, ${x.rut}: ${x.diagnostico || 'sin diagnóstico'}`) : null; }))) : null,
+      h('ul', { class: 'plain' }, ...P.failed.map(it => { const x = mapOf(it.col).get(it.id); return x ? h('li', {}, `${isoToDisp(x.fecha) || 'sin fecha'}, ${x.rut || 'sin RUT'}: ${x.diagnostico || 'sin diagnóstico'}`) : null; }))) : null,
     h('div', { class: 'pactions' },
       P.failed.length ? h('button', { type: 'button', class: 'btn', onclick: () => startPractice(P.failed) }, 'Repetir los que fallé') : null,
       h('button', { type: 'button', class: 'btn primary', onclick: () => { S.prac = null; renderPrac(); } }, 'Nueva práctica'))));
