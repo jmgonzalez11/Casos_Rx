@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#EDF1F5" media="(prefers-color-scheme: light)">
@@ -21,6 +21,8 @@
 <script src="taxonomia.js" defer></script>
 <script src="app.js" defer></script>
 <script src="temario.js" defer></script>
+<script src="lit.js" defer></script>
+<script src="biblioteca.js" defer></script>
 </head>
 <body class="locked">
 
@@ -28,6 +30,9 @@
   <header class="topbar">
     <h1 id="title">Nuevo caso</h1>
     <button id="syncBtn" class="sync" type="button" data-state="local"><span class="dot" aria-hidden="true"></span><span id="syncTxt"></span></button>
+    <button id="cfgBtn" class="iconbtn" type="button" aria-label="Ajustes" title="Ajustes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+    </button>
     <button id="lockBtn" class="iconbtn" type="button" aria-label="Bloquear" title="Bloquear (pedirá la frase para volver a entrar)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
     </button>
@@ -109,6 +114,10 @@
 
     <!-- ============ MIS CASOS ============ -->
     <section id="view-casos" class="view" hidden>
+      <div class="btnrow tight">
+        <label class="btn sm" for="c-file">Importar Excel o CSV</label>
+        <input type="file" id="c-file" class="visually-hidden" accept=".xlsx,.xlsm,.csv,.tsv,.txt">
+      </div>
       <div class="toolbar">
         <div class="espbar" id="c-esp" role="group" aria-label="Filtrar por especialidad"></div>
         <input type="search" id="c-q" placeholder="Buscar por RUT, fecha, diagnóstico, modalidad…" aria-label="Buscar en mis casos">
@@ -133,7 +142,6 @@
 
     <!-- ============ PRÁCTICA ============ -->
     <section id="view-prac" class="view" hidden>
-      <div class="seg" id="p-mode"></div>
 
       <div id="p-setup">
         <div class="espbar" id="p-esp" role="group" aria-label="Especialidad"></div>
@@ -166,7 +174,11 @@
 
       <div id="p-session" hidden></div>
 
-      <div id="p-tem" hidden>
+    </section>
+
+    <!-- ============ TEMARIO ============ -->
+    <section id="view-tem" class="view" hidden>
+      <div id="t-main">
         <div class="btnrow tight">
           <label class="btn primary" for="t-file">Importar temario</label>
           <input type="file" id="t-file" class="visually-hidden" accept=".pdf,.docx,.pptx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.html,.htm">
@@ -181,6 +193,8 @@
             <option value="">Todos los temas</option>
             <option value="sin">Sin casos</option>
             <option value="con">Con casos</option>
+            <option value="lit">Con literatura</option>
+            <option value="nolit">Sin literatura</option>
           </select>
         </div>
         <p class="count" id="t-count"></p>
@@ -191,6 +205,30 @@
           <button type="button" class="btn danger" id="t-clear">Borrar temario de esta especialidad</button>
         </div>
       </div>
+      <div id="t-page" hidden></div>
+    </section>
+
+    <!-- ============ BIBLIOTECA ============ -->
+    <section id="view-bib" class="view" hidden>
+      <div id="b-main">
+        <div class="seg" id="b-mode"></div>
+        <div class="btnrow tight">
+          <label class="btn primary" for="b-file">Agregar material</label>
+          <input type="file" id="b-file" class="visually-hidden" multiple accept=".pdf,.docx,.html,.htm,.txt,.md,image/*">
+          <button type="button" class="btn" id="b-paste">Pegar texto</button>
+        </div>
+        <p class="hint">PDF (STATdx, Radiopaedia, papers), Word, imágenes o texto. Las imágenes se separan con su leyenda y el texto se guarda por fuente.</p>
+        <div class="espbar" id="b-esp" role="group" aria-label="Especialidad"></div>
+        <input type="search" id="b-q" placeholder="Buscar enfermedad, leyenda, fuente…" aria-label="Buscar en la biblioteca">
+        <div class="filters">
+          <select id="b-org" aria-label="Órgano"></select>
+          <select id="b-sub" aria-label="Subtema"></select>
+          <select id="b-fuente" aria-label="Fuente"></select>
+        </div>
+        <p class="count" id="b-count"></p>
+        <div id="b-list"></div>
+      </div>
+      <div id="b-page" hidden></div>
     </section>
 
     <!-- ============ RESIDENTES ============ -->
@@ -277,19 +315,23 @@
     </button>
     <button type="button" data-tab="casos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5l1.5 1.5L8 5.5M4 12.5L5.5 14 8 11.5M4 18.5L5.5 20 8 17.5M11 7h9M11 13h9M11 19h9"/></svg>
-      Mis casos
-    </button>
-    <button type="button" data-tab="prac">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5C6.5 5 9.5 5 12 6.5v13C9.5 18 6.5 18 4 19.5z"/><path d="M20 6.5C17.5 5 14.5 5 12 6.5v13c2.5-1.5 5.5-1.5 8 0z"/></svg>
-      Práctica
+      Casos
     </button>
     <button type="button" data-tab="res">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M16 14.6c2.3.1 4 1.4 4.5 4.4"/></svg>
       Residentes
     </button>
-    <button type="button" data-tab="cfg">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
-      Ajustes
+    <button type="button" data-tab="prac">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5C6.5 5 9.5 5 12 6.5v13C9.5 18 6.5 18 4 19.5z"/><path d="M20 6.5C17.5 5 14.5 5 12 6.5v13c2.5-1.5 5.5-1.5 8 0z"/></svg>
+      Práctica
+    </button>
+    <button type="button" data-tab="tem">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+      Temario
+    </button>
+    <button type="button" data-tab="bib">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5-8 8"/></svg>
+      Biblioteca
     </button>
   </nav>
 </div>
@@ -351,6 +393,7 @@
 
 <dialog id="detail"></dialog>
 <dialog id="impDlg"></dialog>
+<dialog id="viewer" class="viewer"></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

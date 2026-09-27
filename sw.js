@@ -1,7 +1,7 @@
 /* Service worker: guarda la app para usarla sin conexión.
    Sube CACHE (v3, v4…) y APP_VERSION en app.js cada vez que publiques cambios. */
-const CACHE = 'casos-rad-v7';
-const SHELL = ['./', './index.html', './styles.css', './app.js', './theme.js', './taxonomia.js', './temario.js', './manifest.webmanifest',
+const CACHE = 'casos-rad-v9';
+const SHELL = ['./', './index.html', './styles.css', './app.js', './theme.js', './taxonomia.js', './temario.js', './lit.js', './biblioteca.js', './manifest.webmanifest',
   './vendor/pdfjs/pdf.min.mjs', './vendor/pdfjs/pdf.worker.min.mjs',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 // cache: 'reload' evita que se guarde una copia vieja desde la caché HTTP del navegador

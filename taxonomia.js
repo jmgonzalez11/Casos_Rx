@@ -432,3 +432,11 @@ function classifyText(esp, text, allowedSub) {
 }
 const organosDe = esp => (TAXONOMIA[esp] ? TAXONOMIA[esp].organos.map(o => o[0]) : []);
 const subtemasDe = esp => (TAXONOMIA[esp] ? TAXONOMIA[esp].subtemas.map(o => o[0]) : []);
+
+/** Puntaje de afinidad de un texto con una especialidad (para sugerir la especialidad de un material). */
+function espScore(esp, text) {
+  const ix = _taxFor(esp); if (!ix) return 0;
+  let t = ' ' + String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() + ' ', sc = 0;
+  for (const { re, w } of ix.org) t = t.replace(re, m => { sc += w; return '\u0001'.repeat(m.length); });
+  return sc;
+}
