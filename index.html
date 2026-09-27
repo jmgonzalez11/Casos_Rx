@@ -218,6 +218,13 @@
     <!-- ============ AJUSTES ============ -->
     <section id="view-cfg" class="view" hidden>
       <div class="panel">
+        <h2>Aplicación</h2>
+        <p class="muted" id="cfg-version"></p>
+        <div class="btnrow"><button type="button" class="btn primary" id="cfg-update">Buscar actualizaciones</button></div>
+        <p class="hint">Descarga la última versión publicada y reinicia la app. Tus casos no se tocan: están guardados en el dispositivo y en el Sheet.</p>
+      </div>
+
+      <div class="panel">
         <h2>Sincronización</h2>
         <p class="muted" id="cfg-status"></p>
         <label class="lbl" for="cfg-url">URL de la aplicación web (Apps Script)</label>
@@ -319,6 +326,7 @@
       <button type="button" class="link" id="g-back" hidden>Usar otra conexión</button>
       <p class="err" id="g-err-unlock"></p>
     </form>
+    <button type="button" class="link sm gate-upd" id="g-update">Buscar actualizaciones</button>
   </div>
 </div>
 

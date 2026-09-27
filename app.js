@@ -7,6 +7,8 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
+const APP_VERSION = '2.1';
+
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
   'Neurorradiología', 'Musculoesquelético', 'Pediatría', 'Imágenes mamarias', 'Digestivo', 'Intervencional'];
@@ -1385,6 +1387,9 @@ function renderCfg() {
   const n = S.dirty.size;
   $('#cfg-status').textContent = !S.cfg.endpoint ? 'Sin conexión configurada: los casos solo existen en este dispositivo.'
     : `Última sincronización: ${S.cfg.lastSync ? fmtDT(S.cfg.lastSync) : 'nunca'}. ${n ? `${n} cambio${n > 1 ? 's' : ''} pendiente${n > 1 ? 's' : ''}.` : 'Sin cambios pendientes.'}${S.syncErr ? ' Último error: ' + S.syncErr : ''}`;
+  $('#cfg-version').textContent = `Versión ${APP_VERSION}.` + (S.updReady ? ' Hay una actualización lista: toca el botón para aplicarla.'
+    : S.cfg.lastUpdCheck ? ` Última búsqueda: ${fmtDT(S.cfg.lastUpdCheck)}` : '');
+  $('#cfg-update').textContent = S.updReady ? 'Aplicar actualización' : 'Buscar actualizaciones';
   $('#cfg-counts').textContent = `${live(S.casos).length} casos propios, ${live(S.res).length} casos de residentes y ${live(S.tem).length} temas en este dispositivo.${S.bad ? ` ${S.bad} registro(s) ilegibles ignorados.` : ''}`;
 }
 async function connectFromCfg(btn) {
@@ -1415,6 +1420,63 @@ async function wipeDevice() {
   DB.db.close();
   await new Promise(r => { const q = indexedDB.deleteDatabase('casos-rad'); q.onsuccess = q.onerror = q.onblocked = () => r(); });
   location.reload();
+}
+
+/* ---------------- Actualizaciones de la app ---------------- */
+function swAsk(sw, msg, ms = 60000) {
+  return new Promise((res, rej) => {
+    const ch = new MessageChannel();
+    const t = setTimeout(() => rej(new Error('el service worker no respondió')), ms);
+    ch.port1.onmessage = e => { clearTimeout(t); e.data && e.data.error ? rej(new Error(e.data.error)) : res(e.data || {}); };
+    sw.postMessage(msg, [ch.port2]);
+  });
+}
+function swActivated(sw, ms = 60000) {
+  return new Promise((res, rej) => {
+    if (sw.state === 'activated') return res();
+    const t = setTimeout(() => rej(new Error('la instalación tardó demasiado')), ms);
+    sw.addEventListener('statechange', () => {
+      if (sw.state === 'activated') { clearTimeout(t); res(); }
+      else if (sw.state === 'redundant') { clearTimeout(t); rej(new Error('la instalación falló')); }
+    });
+  });
+}
+async function checkUpdates(btn) {
+  if (!('serviceWorker' in navigator)) { location.reload(); return; }
+  if (!navigator.onLine) { toast('Sin conexión: conéctate a internet para buscar actualizaciones', true); return; }
+  const draft = !!($('#f-rut').value.trim() || $('#f-dx').value.trim() || $('#f-notas').value.trim());
+  busy(btn, true, 'Buscando…');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg || !reg.active) { location.reload(); return; }
+    await reg.update();                              // ¿cambió sw.js? (nueva versión publicada)
+    let changed = false;
+    const nw = reg.installing || reg.waiting;
+    if (nw) {
+      if (nw.state === 'installed') await swAsk(nw, { type: 'skip' }).catch(() => {});
+      await swActivated(nw); changed = true;
+    } else {
+      changed = !!(await swAsk(reg.active, { type: 'refresh' })).changed;   // ¿cambió algún archivo aunque sw.js sea igual?
+    }
+    S.cfg.lastUpdCheck = Date.now(); await saveCfg();
+    if (!changed && !S.updReady) { toast(`Ya tienes la última versión (${APP_VERSION})`); renderCfg(); return; }
+    if (draft && !confirm('Hay una actualización. Al aplicarla la app se reinicia y se pierde el caso que estás escribiendo sin guardar. ¿Reiniciar ahora?')) {
+      S.updReady = true; renderCfg(); toast('La actualización se aplicará la próxima vez que abras la app'); return;
+    }
+    if (S.key && S.dirty.size && S.cfg.endpoint) await sync().catch(() => {});   // los cambios igual quedan guardados en el dispositivo
+    toast('Actualización descargada. Reiniciando…');
+    setTimeout(() => location.reload(), 700);
+  } catch (e) {
+    toast('No se pudo buscar la actualización: ' + e.message, true);
+  } finally { busy(btn, false); }
+}
+function watchUpdates() {
+  if (!('serviceWorker' in navigator)) return;
+  let had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (had) { S.updReady = true; if (S.tab === 'cfg') renderCfg(); toast('Hay una versión nueva. Ajustes → Buscar actualizaciones para aplicarla.'); }
+    had = true;
+  });
 }
 
 /* ---------------- Navegación ---------------- */
@@ -1484,6 +1546,8 @@ function bindEvents() {
   $('#cfg-exp-c').addEventListener('click', exportCasos);
   $('#cfg-exp-r').addEventListener('click', exportRes);
   $('#cfg-wipe').addEventListener('click', wipeDevice);
+  $('#cfg-update').addEventListener('click', e => checkUpdates(e.currentTarget));
+  $('#g-update').addEventListener('click', e => checkUpdates(e.currentTarget));
   // Acceso
   $('#g-connect').addEventListener('submit', async e => {
     e.preventDefault();
@@ -1566,7 +1630,7 @@ async function boot() {
   S.cfg = { ...S.cfg, ...((await DB.get('meta', 'cfg')) || {}) };
   S.meta = await DB.get('meta', 'crypto');
   initForm(); bindEvents();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) { watchUpdates(); navigator.serviceWorker.register('./sw.js').catch(() => {}); }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if (!S.meta) { showGate('connect'); return; }
   const k = await DB.get('meta', 'key');

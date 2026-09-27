@@ -231,6 +231,7 @@ dialog::backdrop{background:rgba(8,14,20,.5)}
 .gate form{display:grid;gap:12px}
 .gate .lbl{margin:4px 0 -6px}
 .gate p.muted{margin:0}
+.gate-upd{display:block;margin:18px auto 0;color:var(--muted)}
 .err{min-height:1.2em;margin:0;font-size:.88rem;color:var(--danger)}
 
 /* ---------- aviso ---------- */
