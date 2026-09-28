@@ -342,10 +342,15 @@ const TAXONOMIA = {
       ['Páncreas', KW_PANCREAS],
       ['Peritoneo, mesenterio y pared', L(KW_PERITONEO, ['hernia', 'pared abdominal'])],
       ['Anastomosis y cirugía bariátrica', ['bariatric', 'bypass gastrico', 'by pass gastrico', 'manga gastrica', 'sleeve', 'anastomo', 'gastroyeyuno', 'fundoplic', 'nissen', 'ileostom', 'colostom', 'petersen']],
-      ['Suelo pélvico y canal anal', ['suelo pelvico', 'piso pelvico', 'defecograf', 'prolapso', 'rectocele', 'fistula perianal', 'perianal', 'esfinter anal', 'canal anal', 'incontinencia fecal']]
+      ['Suelo pélvico y canal anal', ['suelo pelvico', 'piso pelvico', 'defecograf', 'prolapso', 'rectocele', 'fistula perianal', 'perianal', 'esfinter anal', 'canal anal', 'incontinencia fecal']],
+      ['Vejiga y uretra (fluoroscopía)', ['vejiga', 'vesical', 'uretra', 'uretral', 'cistograf', 'uretrocistograf', 'uretrograf', 'reflujo vesicoureteral', 'valvas']]
     ],
     subtemas: [
-      ['Estudios contrastados y técnica', ['esofagogram', 'esofagograf', 'seriada', 'transito', 'enema', 'deglucion', 'bario', 'baritad', 'contraste hidrosoluble', 'fluoroscop', 'radioscop', 'tecnica', 'protocolo']],
+      ['EED y esofagograma', ['eed', 'esofagogram', 'esofagograf', 'esofago estomago duodeno', 'esofago-estomago-duodeno', 'serie esofagogastroduodenal', 'seriada', 'transito esofag', 'bario', 'baritad']],
+      ['Videodeglución', ['videodeglucion', 'video deglucion', 'videofluoroscop', 'deglucion', 'penetracion laringea', 'aspiracion laringotraqueal', 'aspiracion', 'disfagia orofaringea', 'residuo en valleculas', 'valleculas', 'senos piriformes']],
+      ['Cistografía', ['cistograf', 'rotura vesical', 'fistula vesical', 'filtracion vesical', 'dehiscencia vesical', 'fuga vesical']],
+      ['Uretrocistografía (retrógrada y miccional)', ['uretrocistograf', 'uretrograf', 'ucg', 'cumg', 'miccional', 'estenosis uretral', 'estrechez uretral', 'valvas', 'reflujo vesicoureteral', 'rvu', 'lesion uretral', 'rotura uretral']],
+      ['Estudios contrastados y técnica', ['transito', 'enema', 'contraste hidrosoluble', 'fluoroscop', 'radioscop', 'tecnica', 'protocolo']],
       ['Motilidad y trastornos funcionales', ['motilidad', 'acalasia', 'espasmo', 'presbiesofago', 'dismotilidad', 'disfagia', 'reflujo', 'gastroparesia', 'pseudoobstruccion']],
       ['Neoplasias', L(KW_ONCO, ['polipo', 'poliposis', 'linitis', 'carcinoide'])],
       ['Enfermedad inflamatoria intestinal', ['crohn', 'colitis ulcerosa', 'eii', 'ileitis', 'fistula', 'estenosis inflamatoria', 'enfermedad inflamatoria']],
@@ -440,3 +445,39 @@ function espScore(esp, text) {
   for (const { re, w } of ix.org) t = t.replace(re, m => { sc += w; return '\u0001'.repeat(m.length); });
   return sc;
 }
+
+/* ---------- Sistemas de clasificación (Bosniak, LI-RADS, Salter-Harris…) ----------
+   Se detectan en el diagnóstico con su valor («Bosniak IIF», «LI-RADS 5») y sirven para filtrar y practicar. */
+const CLASIF = [
+  ['Bosniak', 'bosniak'], ['LI-RADS', 'li-?rads'], ['PI-RADS', 'pi-?rads'], ['BI-RADS', 'bi-?rads'], ['TI-RADS', '(?:acr[ -])?ti-?rads'],
+  ['O-RADS', 'o-?rads'], ['Lung-RADS', 'lung-?rads'], ['C-RADS', 'c-?rads'], ['VI-RADS', 'vi-?rads'], ['Fleischner', 'fleischner'],
+  ['Lodwick', 'lodwick'], ['Salter-Harris', 'salter[ -]?harris'], ['Schatzker', 'schatzker'], ['Garden', 'garden'], ['Pauwels', 'pauwels'],
+  ['Neer', 'neer'], ['Weber', 'weber'], ['Lauge-Hansen', 'lauge[ -]?hansen'], ['Mason', 'mason'], ['Frykman', 'frykman'], ['Gustilo', 'gustilo'],
+  ['Rockwood', 'rockwood'], ['Tile', 'tile'], ['Young-Burgess', 'young[ -]?burgess'], ['Denis', 'denis'], ['TLICS', 'tlics'], ['SLIC', 'slic'],
+  ['Anderson-D\'Alonzo', 'anderson'], ['Sanders', 'sanders'], ['Hawkins', 'hawkins'], ['Mayfield', 'mayfield'], ['Kellgren-Lawrence', 'kellgren(?:[ -]?lawrence)?'],
+  ['Outerbridge', 'outerbridge'], ['ICRS', 'icrs'], ['Pfirrmann', 'pfirrmann'], ['Modic', 'modic'], ['Ficat', 'ficat'], ['ARCO', 'arco'],
+  ['Meyerding', 'meyerding'], ['Stoller', 'stoller'], ['Snyder (SLAP)', 'snyder'], ['AO/OTA', 'ao/ota|ao'], ['AAST', 'aast'], ['Balthazar', 'balthazar'],
+  ['Atlanta', 'atlanta'], ['Todani', 'todani'], ['Stanford', 'stanford'], ['DeBakey', 'de ?bakey'], ['Fazekas', 'fazekas'], ['ASPECTS', 'aspects'],
+  ['Fisher', 'fisher'], ['Hunt y Hess', 'hunt(?: y | and |-)hess|hunt'], ['WFNS', 'wfns'], ['Spetzler-Martin', 'spetzler(?:[ -]?martin)?'],
+  ['Borden', 'borden'], ['Cognard', 'cognard'], ['Graf', 'graf'], ['SFU', 'sfu'], ['Bethesda', 'bethesda'], ['Lugano', 'lugano'], ['FIGO', 'figo'],
+  ['Hinchey', 'hinchey'], ['Child-Pugh', 'child(?:[ -]?pugh)?'], ['RECIST', 'recist'], ['Deauville', 'deauville'], ['Nascet', 'nascet'],
+  ['Kaiser (neuromielitis)', 'kaiser'], ['McDonald', 'mc ?donald'], ['TNM', 'tnm']
+];
+const _clasRe = CLASIF.map(([name, pat]) => [name, new RegExp(
+  `(?<![a-z0-9])(?:${pat})(?![a-z])[\\s:-]*(?:tipo|grado|grade|type|clase|categoria|estadio)?\\s*(iif|iii|ii|iv|vi|v|i|[0-9]{1,2}[a-c]?|[a-e][0-9]?|tr|m|na)?(?![a-z0-9])`, 'g')]);
+function detectClasif(text) {
+  const t = String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(), out = [];
+  for (const [name, re] of _clasRe) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(t))) {
+      if (name === 'AO/OTA' && !m[1]) continue;                   // «ao» suelto es muy ambiguo
+      if (['Garden', 'Weber', 'Mason', 'Tile', 'Denis', 'Hawkins', 'Sanders', 'Graf', 'Stanford', 'Atlanta', 'Anderson-D\'Alonzo', 'Child-Pugh', 'Fisher', 'Kaiser (neuromielitis)'].includes(name) && !m[1]) continue;
+      const v = m[1] ? ' ' + (/^[ivx]+f?$|^iif$/.test(m[1]) ? m[1].toUpperCase() : m[1].toUpperCase()) : '';
+      const tag = name + v;
+      if (!out.includes(tag)) out.push(tag);
+    }
+  }
+  return out;
+}
+const clasifName = tag => { const c = CLASIF.find(([n]) => tag === n || tag.startsWith(n + ' ')); return c ? c[0] : tag.replace(/\s+\S+$/, ''); };

@@ -7,7 +7,7 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.1';
 
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
@@ -25,7 +25,7 @@ const MESES = ['1', '2', '3', '4'];
 const VERIF = 'casos-rad-verif-v1';
 const KDF_ITER = 600000;
 const MIN_ITER = 100000;
-const COLS = ['casos', 'residentes', 'temario', 'lit', 'img', 'nota'];
+const COLS = ['casos', 'residentes', 'temario', 'lit', 'img', 'nota', 'plan'];
 const NONE = '__sin__';   // valor del filtro «Sin especialidad» (distinto de «Todas»)
 const espOk = (f, e) => f === '' || (f === NONE ? !e : e === f);
 const URL_RE = /^https:\/\/script\.google\.com\/(macros|a\/macros\/[^/]+)\/s\/[\w-]+\/exec$/;
@@ -34,17 +34,17 @@ const URL_RE = /^https:\/\/script\.google\.com\/(macros|a\/macros\/[^/]+)\/s\/[\
 const S = {
   key: null, meta: null, joinMeta: null, remember: false,
   cfg: { endpoint: '', token: '', cursor: 0, lastSync: 0, lockMin: 15 },
-  casos: new Map(), res: new Map(), tem: new Map(), lit: new Map(), img: new Map(), nota: new Map(), dirty: new Set(), bad: 0,
+  casos: new Map(), res: new Map(), tem: new Map(), lit: new Map(), img: new Map(), nota: new Map(), plan: new Map(), dirty: new Set(), bad: 0,
   editingId: null, syncing: false, syncState: 'local', syncErr: '',
   lastAct: Date.now(), timers: [], tab: 'nuevo',
-  fc: { esp: '', q: '', estado: '', tipo: '', organo: '', subtema: '', mes: '', dir: -1 },
-  fr: { esp: '', q: '', residente: '', organo: '', subtema: '', mes: '', dir: -1 },
-  fp: { esp: '', organo: '', subtema: '', mes: '', src: 'all', orden: 'prio', n: '20', hide: false, mode: 'casos' },
+  fc: { esp: '', q: '', estado: '', tipo: '', organo: '', subtema: '', mes: '', clasif: '', dir: -1 },
+  fr: { esp: '', q: '', residente: '', organo: '', subtema: '', mes: '', clasif: '', dir: -1 },
+  fp: { esp: '', organo: '', subtema: '', mes: '', clasif: '', src: 'all', orden: 'prio', n: '20', hide: false, oral: false, oralSec: '180' },
   ft: { esp: '', mes: '', cov: '' },
   form: { esp: '', mes: '', mod: new Set(), tipo: 'Entrega', organo: '', subtema: '', orgOtro: false, subOtro: false, touched: {} },
   prac: null, importSheets: null, importFile: '', temPreview: null
 };
-const COL_KEY = { casos: 'casos', residentes: 'res', temario: 'tem', lit: 'lit', img: 'img', nota: 'nota' };
+const COL_KEY = { casos: 'casos', residentes: 'res', temario: 'tem', lit: 'lit', img: 'img', nota: 'nota', plan: 'plan' };
 const mapOf = col => S[COL_KEY[col]];
 
 /* ---------------- Utilidades ---------------- */
@@ -64,7 +64,7 @@ function h(tag, props, ...kids) {
     else if (k in el && typeof v !== 'string') el[k] = v;
     else el.setAttribute(k, v === true ? '' : v);
   }
-  for (const c of kids.flat()) if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
   return el;
 }
 
@@ -367,7 +367,9 @@ function eff(x) {
   const m = matchTema(x.especialidad, text, organo, subtema);
   const v = {
     organo, subtema, organoAuto: !x.organo && !!organo, subtemaAuto: !x.subtema && !!subtema,
-    mes: String(x.mes || (m && m.tema.mes) || ''), mesAuto: !x.mes && !!(m && m.tema.mes), tema: m ? m.tema : null
+    mes: String(x.mes || (m && m.tema.mes) || ''), mesAuto: !x.mes && !!(m && m.tema.mes), tema: m ? m.tema : null,
+    clasif: x.clasif && x.clasif.length ? x.clasif : detectClasif([text, x.examen, x.categoria].filter(Boolean).join(' ')),
+    clasifAuto: !(x.clasif && x.clasif.length)
   };
   _eff.set(x.id, { key, v });
   return v;
@@ -529,6 +531,8 @@ function refreshForm() {
   syncOtro();
 }
 
+const parseClasif = v => [...new Set(String(v || '').split(/[,;]+/).map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+
 /* ---------------- Campo de fecha (texto con máscara + calendario) ---------------- */
 function bindDateMask(txt, pick) {
   txt.addEventListener('input', () => {
@@ -566,6 +570,8 @@ function openEditCase(col, id, onDone) {
   const examen = h('input', { type: 'text', 'aria-label': 'Examen', placeholder: 'p. ej. RM de cerebro con contraste' }); examen.value = x0.examen || '';
   const categoria = h('input', { type: 'text', 'aria-label': 'Categoría original' }); categoria.value = x0.categoria || '';
   const resid = h('input', { type: 'text', 'aria-label': 'Aportado por', list: 'dl-resid' }); resid.value = x0.residente || '';
+  const cla = h('input', { type: 'text', 'aria-label': 'Clasificaciones', list: 'dl-cla', autocomplete: 'off' }); cla.value = (x0.clasif || []).join(', ');
+  const dlc = h('datalist', { id: 'dl-cla' }, ...CLASIF.map(c => h('option', { value: c[0] })));
   const dl = h('datalist', { id: 'dl-resid' }, ...[...new Set(live(S.res).map(r => r.residente).filter(Boolean))].sort().map(n => h('option', { value: n })));
   const fEst = dateField(x0.fecha, isRes ? 'Fecha del estudio' : 'Fecha del examen'), fMos = dateField(isRes ? x0.fechaEntrega : x0.mostradoEn, 'Fecha en que se mostró');
   const orgOtro = h('input', { type: 'text', placeholder: 'Escribe el órgano o región', 'aria-label': 'Otro órgano' });
@@ -621,6 +627,8 @@ function openEditCase(col, id, onDone) {
   subOtro.addEventListener('input', () => { E.subtema = subOtro.value.trim(); drawAuto(); });
   const later = debounce(drawOrgSub, 300);
   [dx, notas, examen, categoria].forEach(el => el.addEventListener('input', later));
+  const claAuto = () => { cla.placeholder = (() => { const d = detectClasif([dx.value, notas.value, examen.value].join(' ')); return d.length ? 'Automático: ' + d.join(', ') : 'p. ej. Bosniak IIF'; })(); };
+  [dx, notas, examen].forEach(el => el.addEventListener('input', claAuto)); claAuto();
   rut.addEventListener('input', () => {
     const c = rutClean(rut.value);
     rutInfo.textContent = c.length >= 7 && !rutValid(rut.value) ? 'El dígito verificador no calza' : '';
@@ -639,7 +647,7 @@ function openEditCase(col, id, onDone) {
       rut: r ? (rutValid(r) ? rutFormat(r) : r) : '', fecha: fe, especialidad: E.esp,
       organo: E.organo, subtema: E.subtema, mes: E.mes, modalidades: MODALIDADES.filter(m => E.mods.has(m)).concat([...E.mods].filter(m => !MODALIDADES.includes(m))),
       tipo: E.tipo, diagnostico: dx.value.trim(), notas: notas.value.trim() };
-    Object.assign(p, { examen: examen.value.trim(), categoria: categoria.value.trim() });
+    Object.assign(p, { examen: examen.value.trim(), categoria: categoria.value.trim(), clasif: parseClasif(cla.value) });
     if (isRes) Object.assign(p, { fechaEntrega: fm, residente: resid.value.trim() });
     else Object.assign(p, { mostradoEn: fm, mostrado: !!fm || (!!x0.mostrado && !x0.mostradoEn) });   // borrar la fecha lo desmarca
     busy(btn, true, 'Guardando…');
@@ -663,6 +671,7 @@ function openEditCase(col, id, onDone) {
     row('RUT', rut, rutInfo),
     row(isRes ? 'Fecha del estudio' : 'Fecha del examen', fEst.el),
     row(isRes ? 'Fecha en que se mostró' : 'Mostrado en entrega (fecha)', fMos.el),
+    row('Clasificaciones', cla, dlc, h('p', { class: 'hint' }, 'Separadas por coma, con su valor: «Bosniak IIF, LI-RADS 5». Vacío = se detectan del diagnóstico.')),
     row('Modalidad', modBox),
     row('Examen', examen),
     row('Tipo', tipoBox),
@@ -690,6 +699,7 @@ function initForm() {
   $('#f-sub-otro').addEventListener('input', e => { F.subtema = e.target.value.trim(); F.touched.subtema = true; autoLater(); });
   $('#f-dx').addEventListener('input', autoLater);
   $('#f-notas').addEventListener('input', autoLater);
+  $('#f-cla').addEventListener('input', autoLater);
   $('#f-reauto').addEventListener('click', () => { F.touched = {}; F.orgOtro = false; F.subOtro = false; autoClassify(); });
 
   const txt = $('#f-fecha'), pick = $('#f-fecha-pick');
@@ -752,6 +762,8 @@ function autoClassify() {
   if (!F.touched.subtema && F.subtema) auto.push(F.subtema);
   hint.textContent = auto.length ? `Clasificado automáticamente: ${auto.join(', ')}. Toca otra opción si no corresponde.` : '';
   $('#f-reauto').hidden = !(F.touched.organo || F.touched.subtema || F.touched.mes);
+  const det = detectClasif(text);
+  $('#claHint').textContent = !$('#f-cla').value.trim() && det.length ? `Detectado en el diagnóstico: ${det.join(', ')} (se guarda solo; escribe aquí para reemplazarlo).` : '';
   const hasTem = live(S.tem).some(t => t.especialidad === F.esp);
   if (m) mh.textContent = `Según el temario${m.tema.mes ? `, mes ${m.tema.mes}` : ''}: «${m.tema.tema}»` + (F.touched.mes && m.tema.mes && String(m.tema.mes) !== F.mes ? '. Elegiste otro mes.' : '');
   else mh.textContent = !text ? '' : hasTem ? 'Sin coincidencia clara con el temario.' : 'Carga el temario de esta especialidad (en Práctica) para sugerir el mes.';
@@ -788,7 +800,8 @@ async function onSubmit(ev) {
     rut: rutValid(rutRaw) ? rutFormat(rutRaw) : rutRaw.trim(),
     fecha: iso, especialidad: F.esp, mes: F.mes, organo: F.organo, subtema: F.subtema,
     modalidades: MODALIDADES.filter(m => F.mod.has(m)),
-    tipo: F.tipo, diagnostico: $('#f-dx').value.trim(), notas: $('#f-notas').value.trim()
+    tipo: F.tipo, diagnostico: $('#f-dx').value.trim(), notas: $('#f-notas').value.trim(),
+    clasif: parseClasif($('#f-cla').value)
   });
   const btn = $('#saveBtn'); busy(btn, true, 'Guardando…');
   try { await saveRecord('casos', p); }
@@ -814,7 +827,7 @@ function resetForm(full = false) {
   buildOrgSub(); refreshForm();
   $('#saveBtn').textContent = 'Guardar caso'; $('#cancelEdit').hidden = true;
   $('#rutHint').textContent = ''; $('#rutHint').className = 'hint';
-  $('#dxHint').textContent = ''; $('#mesHint').textContent = '';
+  $('#dxHint').textContent = ''; $('#mesHint').textContent = ''; $('#claHint').textContent = '';
   if (S.tab === 'nuevo') $('#title').textContent = 'Nuevo caso';
 }
 
@@ -828,7 +841,7 @@ function editCase(id) {
   F.orgOtro = !!F.organo && !organosDe(F.esp).includes(F.organo);
   F.subOtro = !!F.subtema && !subtemasDe(F.esp).includes(F.subtema);
   F.touched = { organo: !!F.organo, subtema: !!F.subtema, mes: !!F.mes };
-  $('#f-dx').value = x.diagnostico || ''; $('#f-notas').value = x.notas || '';
+  $('#f-dx').value = x.diagnostico || ''; $('#f-notas').value = x.notas || ''; $('#f-cla').value = (x.clasif || []).join(', ');
   buildOrgSub();
   $('#saveBtn').textContent = 'Guardar cambios'; $('#cancelEdit').hidden = false;
   showTab('nuevo'); rutHint(); autoClassify();
@@ -849,7 +862,7 @@ function matchQ(x, q, extra) {
     return tc.length >= 4 && /\d/.test(tc) && R.includes(tc);
   });
 }
-const extraOf = (e, more = '') => `${e.organo} ${e.subtema} ${mesLabel(e)} ${more}`;
+const extraOf = (e, more = '') => `${e.organo} ${e.subtema} ${mesLabel(e)} ${e.clasif.join(' ')} ${more}`;
 const fKey = x => x.fecha || x.fechaEntrega || x.mostradoEn || '0000';
 const byFecha = dir => (a, b) => (fKey(a) < fKey(b) ? -1 : fKey(a) > fKey(b) ? 1 : 0) * dir
   || ((a.createdAt || 0) - (b.createdAt || 0)) * dir;
@@ -897,10 +910,11 @@ function facetFilter(items, f, ids) {
   f.organo = fillSelect($(ids.org), 'Órganos', orderedVals(ev.map(e => e.organo), taxOrder(f.esp, 'o')), f.organo);
   f.subtema = fillSelect($(ids.sub), 'Subtemas', orderedVals(ev.map(e => e.subtema), taxOrder(f.esp, 's')), f.subtema);
   f.mes = fillSelect($(ids.mes), 'Meses', mesVals(ev.map(e => e.mes)), f.mes, v => 'Mes ' + v, ev.some(e => !e.mes) ? [['_', 'Sin mes']] : []);
+  if (ids.cla) f.clasif = fillSelect($(ids.cla), 'Clasificaciones', [...new Set(ev.flatMap(e => e.clasif.map(clasifName)))].sort((a, b) => a.localeCompare(b, 'es')), f.clasif || '');
   const list = base.filter(x => {
     const e = E.get(x.id);
     return (!f.organo || e.organo === f.organo) && (!f.subtema || e.subtema === f.subtema)
-      && (!f.mes || (f.mes === '_' ? !e.mes : e.mes === f.mes));
+      && (!f.mes || (f.mes === '_' ? !e.mes : e.mes === f.mes)) && (!f.clasif || e.clasif.some(c => clasifName(c) === f.clasif));
   });
   return { list, E };
 }
@@ -910,10 +924,10 @@ function setActiveCount(el, n) { el.textContent = n ? String(n) : ''; el.hidden 
 function renderCasos() {
   const f = S.fc, all = live(S.casos);
   renderEspBar($('#c-esp'), f, all, renderCasos);
-  const { list, E } = facetFilter(all, f, { org: '#c-org', sub: '#c-sub', mes: '#c-mes' });
+  const { list, E } = facetFilter(all, f, { org: '#c-org', sub: '#c-sub', mes: '#c-mes', cla: '#c-cla' });
   const arr = list.filter(x => (!f.tipo || x.tipo === f.tipo) && (f.estado !== 'pend' || !x.mostrado) && (f.estado !== 'most' || x.mostrado)
     && matchQ(x, f.q, extraOf(E.get(x.id), `${x.examen || ''} ${x.categoria || ''}`))).sort(byFecha(f.dir));
-  setActiveCount($('#c-nf'), [f.organo, f.subtema, f.mes, f.estado, f.tipo].filter(Boolean).length);
+  setActiveCount($('#c-nf'), [f.organo, f.subtema, f.mes, f.clasif, f.estado, f.tipo].filter(Boolean).length);
   const shown = arr.filter(x => x.mostrado).length;
   $('#c-count').textContent = arr.length ? `${arr.length} caso${arr.length > 1 ? 's' : ''}, ${shown} mostrado${shown === 1 ? '' : 's'}` : '';
   $('#c-orden').textContent = f.dir < 0 ? 'Más recientes primero' : 'Más antiguos primero';
@@ -941,7 +955,7 @@ function caseRow(x, n, e) {
         (x.modalidades || []).length ? h('span', { class: 'mods' }, x.modalidades.join(' + ')) : null,
         x.tipo ? h('span', { class: 'tipo' }, x.tipo) : null),
       h('div', { class: 'dx' }, x.diagnostico || 'Sin diagnóstico'),
-      h('div', { class: 'meta' }, [x.especialidad, e.organo, e.subtema, mesLabel(e),
+      h('div', { class: 'meta' }, [x.especialidad, e.organo, e.subtema, mesLabel(e), e.clasif.join(', '),
         x.mostrado ? 'Mostrado' + (x.mostradoEn ? ' ' + isoToDisp(x.mostradoEn) : '') : ''].filter(Boolean).join(', '))));
 }
 
@@ -957,7 +971,7 @@ function copyText(t, label) {
   navigator.clipboard.writeText(t).then(() => toast(label + ' copiado')).catch(() => toast('No se pudo copiar', true));
 }
 const autoTag = (v, auto) => (v ? v + (auto ? ' (automático)' : '') : '');
-const pracTxt = x => (x.practica ? `${x.practica.ok} acierto${x.practica.ok === 1 ? '' : 's'}, ${x.practica.fail} error${x.practica.fail === 1 ? '' : 'es'}` : '');
+const pracTxt = x => (x.practica ? `${x.practica.ok} acierto${x.practica.ok === 1 ? '' : 's'}, ${x.practica.fail} error${x.practica.fail === 1 ? '' : 'es'}${x.practica.due ? `; próximo repaso ${isoToDisp(new Date(x.practica.due).toISOString().slice(0, 10))}` : ''}` : '');
 function openCaseDetail(id) {
   const x = S.casos.get(id); if (!x) return;
   const e = eff(x), c = rutClean(x.rut);
@@ -966,7 +980,7 @@ function openCaseDetail(id) {
     ['Fecha del examen', isoToDisp(x.fecha || '')], ['RUT', x.rut || 'Sin RUT'], ['Especialidad', x.especialidad],
     ['Órgano', autoTag(e.organo, e.organoAuto)], ['Subtema', autoTag(e.subtema, e.subtemaAuto)],
     ['Mes de rotación', e.mes ? 'Mes ' + e.mes + (e.mesAuto ? ' (según temario)' : '') : ''],
-    ['Tema del temario', e.tema ? e.tema.tema : ''],
+    ['Tema del temario', e.tema ? e.tema.tema : ''], ['Clasificaciones', autoTag(e.clasif.join(', '), e.clasifAuto)],
     ['Modalidad', (x.modalidades || []).join(', ')], ['Examen', x.examen], ['Categoría original', x.categoria], ['Tipo', x.tipo], ['Notas', x.notas],
     ['Mostrado', x.mostrado ? 'Sí' + (x.mostradoEn ? ', ' + isoToDisp(x.mostradoEn) : '') : 'No'], ['Importado de', x.fuente],
     ['Mostrado por residentes', byRes], ['Práctica', pracTxt(x)], ['Registrado', fmtDT(x.createdAt)]
@@ -987,10 +1001,10 @@ function renderRes() {
   renderEspBar($('#r-esp'), f, all, renderRes);
   const names = [...new Set(all.map(x => x.residente).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
   f.residente = fillSelect($('#r-resid'), 'Aportado por', names, f.residente);
-  const { list, E } = facetFilter(all, f, { org: '#r-org', sub: '#r-sub', mes: '#r-mes' });
+  const { list, E } = facetFilter(all, f, { org: '#r-org', sub: '#r-sub', mes: '#r-mes', cla: '#r-cla' });
   const mine = new Set(live(S.casos).map(x => rutClean(x.rut)));
   const arr = list.filter(x => (!f.residente || x.residente === f.residente) && matchQ(x, f.q, extraOf(E.get(x.id), `${x.residente || ''} ${x.examen || ''} ${x.categoria || ''} ${isoToDisp(x.fechaEntrega || '')}`))).sort(byFecha(f.dir));
-  setActiveCount($('#r-nf'), [f.residente, f.organo, f.subtema, f.mes].filter(Boolean).length);
+  setActiveCount($('#r-nf'), [f.residente, f.organo, f.subtema, f.mes, f.clasif].filter(Boolean).length);
   $('#r-count').textContent = arr.length ? `${arr.length} caso${arr.length > 1 ? 's' : ''}` : '';
   $('#r-orden').textContent = f.dir < 0 ? 'Más recientes primero' : 'Más antiguos primero';
   const listEl = $('#r-list');
@@ -1010,7 +1024,7 @@ function renderRes() {
           x.tipo ? h('span', { class: 'tipo' }, x.tipo) : null,
           x.rut && mine.has(rutClean(x.rut)) ? h('span', { class: 'badge' }, 'En tus casos') : null),
         h('div', { class: 'dx' }, x.diagnostico || 'Sin diagnóstico'),
-        h('div', { class: 'meta' }, [x.especialidad, e.organo, e.subtema, mesLabel(e), x.residente].filter(Boolean).join(', '))));
+        h('div', { class: 'meta' }, [x.especialidad, e.organo, e.subtema, mesLabel(e), e.clasif.join(', '), x.residente].filter(Boolean).join(', '))));
   }));
 }
 function openResDetail(id) {
@@ -1021,6 +1035,7 @@ function openResDetail(id) {
     ['RUT', x.rut || 'Sin RUT'], ['Especialidad', x.especialidad], ['Examen', x.examen], ['Categoría original', x.categoria],
     ['Órgano', autoTag(e.organo, e.organoAuto)], ['Subtema', autoTag(e.subtema, e.subtemaAuto)],
     ['Mes de rotación', e.mes ? 'Mes ' + e.mes + (e.mesAuto ? ' (según temario)' : '') : ''], ['Tema del temario', e.tema ? e.tema.tema : ''],
+    ['Clasificaciones', autoTag(e.clasif.join(', '), e.clasifAuto)],
     ['Modalidad', (x.modalidades || []).join(', ')], ['Tipo', x.tipo], ['Notas', x.notas], ['Práctica', pracTxt(x)], ['Importado de', x.fuente]
   ], [
     h('button', { type: 'button', class: 'btn primary', onclick: () => openEditCase('residentes', id, () => openResDetail(id)) }, 'Editar'),
@@ -1414,117 +1429,7 @@ function exportTemario() {
     arr.map(t => { const c = temCls(t); return [t.especialidad, t.mes, c.organo, c.subtema, t.tema]; }));
 }
 
-/* ---------------- Práctica ---------------- */
-function pracPool() {
-  const src = S.fp.src, out = [];
-  if (src !== 'res') for (const x of live(S.casos)) out.push({ col: 'casos', x });
-  if (src !== 'mine') {
-    const mine = src === 'all' ? new Set(live(S.casos).map(dedupKey)) : new Set();
-    for (const x of live(S.res)) if (!mine.has(dedupKey(x))) out.push({ col: 'residentes', x });   // el mismo caso importado en ambos lados cuenta una vez
-  }
-  return out;
-}
-function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function orderDeck(list, orden) {
-  if (orden === 'azar') return shuffle(list.slice());
-  if (orden === 'fecha') return list.slice().sort((a, b) => byFecha(-1)(a.x, b.x));
-  // prioridad: nunca practicados, luego con más errores, luego los practicados hace más tiempo
-  return shuffle(list.slice()).sort((a, b) => {
-    const pa = a.x.practica, pb = b.x.practica;
-    if (!pa !== !pb) return pa ? 1 : -1;
-    if (!pa) return 0;
-    return (pa.ok - pa.fail) - (pb.ok - pb.fail) || (pa.last || 0) - (pb.last || 0);
-  });
-}
-function renderPracMode() {
-  $('#p-setup').hidden = !!S.prac;
-  $('#p-session').hidden = !S.prac;
-}
-function renderPrac() {
-  renderPracMode();
-  if (S.prac) return renderSession();
-  const f = S.fp, pool = pracPool();
-  renderEspBar($('#p-esp'), f, pool.map(p => p.x), renderPrac);
-  const colOf = new Map(pool.map(p => [p.x.id, p.col]));
-  const { list } = facetFilter(pool.map(p => p.x), f, { org: '#p-org', sub: '#p-sub', mes: '#p-mes' });
-  S.pracCands = list.map(x => ({ col: colOf.get(x.id), id: x.id, x }));
-  const never = list.filter(x => !x.practica).length, weak = list.filter(x => x.practica && x.practica.fail > x.practica.ok).length;
-  $('#p-count').textContent = list.length
-    ? `${list.length} caso${list.length > 1 ? 's' : ''} con estos filtros: ${never} sin practicar${weak ? `, ${weak} con más errores que aciertos` : ''}.`
-    : 'No hay casos con estos filtros.';
-  const n = f.n === 'all' ? list.length : Math.min(list.length, Number(f.n));
-  $('#p-start').disabled = !list.length;
-  $('#p-start').textContent = list.length ? `Empezar práctica (${n} caso${n === 1 ? '' : 's'})` : 'Empezar práctica';
-}
-function startPractice(items) {
-  if (!items.length) return;
-  S.prac = { deck: items.map(({ col, id }) => ({ col, id })), i: 0, revealed: false, ok: 0, fail: 0, failed: [], active: true };
-  renderPrac(); window.scrollTo(0, 0);
-}
-function startFromFilters() {
-  const f = S.fp;
-  const deck = orderDeck(S.pracCands || [], f.orden);
-  startPractice(f.n === 'all' ? deck : deck.slice(0, Number(f.n)));
-}
-function renderSession() {
-  renderPracMode();
-  const P = S.prac, box = $('#p-session');
-  if (!P.active) return renderSummary();
-  let it = P.deck[P.i], x = it && mapOf(it.col).get(it.id);
-  while (it && (!x || x.deleted)) { P.i++; it = P.deck[P.i]; x = it && mapOf(it.col).get(it.id); }
-  if (!it) { P.active = false; return renderSummary(); }
-  const e = eff(x), hide = S.fp.hide;
-  const rows = [
-    ['Fecha', x.fecha ? isoToDisp(x.fecha) : x.fechaEntrega ? `Sin fecha de estudio (mostrado ${isoToDisp(x.fechaEntrega)})` : 'Sin fecha'],
-    ['RUT', x.rut ? h('span', { class: 'rutline' }, x.rut, ' ', h('button', { type: 'button', class: 'link sm', onclick: () => copyText(x.rut, 'RUT') }, 'Copiar')) : 'Sin RUT'],
-    ['Modalidad', (x.modalidades || []).join(' + ')], ['Examen', x.examen], ['Tipo', x.tipo], ['Especialidad', x.especialidad],
-    ['Órgano', hide && !P.revealed ? '' : e.organo], ['Subtema', hide && !P.revealed ? '' : e.subtema],
-    ['Aportado por', it.col === 'residentes' ? x.residente : '']
-  ].filter(r => r[1]);
-  box.replaceChildren(h('div', { class: 'pcard', style: { '--esp': espColor(x.especialidad) } },
-    h('div', { class: 'pprog' }, h('span', {}, `Caso ${P.i + 1} de ${P.deck.length}`), h('span', { class: 'pscore' }, `${P.ok} bien, ${P.fail} por repasar`)),
-    h('div', { class: 'pbar' }, h('span', { style: { width: `${Math.round(100 * P.i / P.deck.length)}%` } })),
-    h('dl', { class: 'kv' }, ...rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
-    P.revealed
-      ? h('div', { class: 'answer' },
-        h('div', { class: 'lbl' }, 'Diagnóstico'),
-        h('p', { class: 'ans-dx' }, x.diagnostico || 'Sin diagnóstico registrado'),
-        x.notas ? h('p', { class: 'muted' }, x.notas) : null,
-        e.tema ? h('p', { class: 'muted' }, `Temario${e.mes ? ', mes ' + e.mes : ''}: ${e.tema.tema}`) : null)
-      : h('p', { class: 'muted phint' }, 'Abre el estudio en el PACS, interprétalo y luego revisa la respuesta.'),
-    h('div', { class: 'pactions' },
-      P.revealed
-        ? [h('button', { type: 'button', class: 'btn', onclick: () => answer(false) }, 'No lo tenía'),
-          h('button', { type: 'button', class: 'btn primary', onclick: () => answer(true) }, 'Lo tenía')]
-        : h('button', { type: 'button', class: 'btn primary', onclick: () => { P.revealed = true; renderSession(); } }, 'Mostrar respuesta')),
-    h('div', { class: 'psec' },
-      h('button', { type: 'button', class: 'link sm', onclick: () => { P.i++; P.revealed = false; renderSession(); } }, 'Saltar'),
-      P.revealed ? h('button', { type: 'button', class: 'link sm', onclick: () => openEditCase(it.col, it.id, renderSession) }, 'Editar caso') : null,
-      h('button', { type: 'button', class: 'link sm', onclick: () => { P.active = false; renderSession(); } }, 'Terminar'))));
-}
-async function answer(ok) {
-  const P = S.prac, it = P.deck[P.i], x = mapOf(it.col).get(it.id);
-  const pr = { ok: 0, fail: 0, ...(x.practica || {}) };
-  if (ok) pr.ok++; else pr.fail++;
-  pr.last = Date.now();
-  await saveRecord(it.col, { ...x, practica: pr });
-  if (ok) P.ok++; else { P.fail++; P.failed.push(it); }
-  P.i++; P.revealed = false;
-  if (P.i >= P.deck.length) P.active = false;
-  renderSession();
-}
-function renderSummary() {
-  const P = S.prac, done = P.ok + P.fail, box = $('#p-session');
-  renderPracMode();
-  box.replaceChildren(h('div', { class: 'pcard' },
-    h('h2', {}, 'Práctica terminada'),
-    h('p', { class: 'pbig' }, done ? `${P.ok} de ${done} (${Math.round(100 * P.ok / done)} %)` : 'No respondiste casos.'),
-    P.failed.length ? h('div', {}, h('div', { class: 'lbl' }, 'Para repasar'),
-      h('ul', { class: 'plain' }, ...P.failed.map(it => { const x = mapOf(it.col).get(it.id); return x ? h('li', {}, `${isoToDisp(x.fecha) || 'sin fecha'}, ${x.rut || 'sin RUT'}: ${x.diagnostico || 'sin diagnóstico'}`) : null; }))) : null,
-    h('div', { class: 'pactions' },
-      P.failed.length ? h('button', { type: 'button', class: 'btn', onclick: () => startPractice(P.failed) }, 'Repetir los que fallé') : null,
-      h('button', { type: 'button', class: 'btn primary', onclick: () => { S.prac = null; renderPrac(); } }, 'Nueva práctica'))));
-}
+/* ---------------- Práctica: ver estudio.js ---------------- */
 
 /* ---------------- Temario ---------------- */
 const temCls = t => (t.organo && t.subtema ? t : { ...classifyText(t.especialidad, t.tema), ...(t.organo ? { organo: t.organo } : {}), ...(t.subtema ? { subtema: t.subtema } : {}) });
@@ -1559,6 +1464,7 @@ function renderTem() {
   $('#t-count').textContent = inEsp.length ? `${inEsp.length} tema${inEsp.length > 1 ? 's' : ''}, ${withC} con casos (${Math.round(100 * withC / inEsp.length)} %)` : '';
   $('#t-clear').hidden = !f.esp || !inEsp.length;
   $('#t-assign').hidden = !all.length; $('#t-export').hidden = !all.length;
+  $('#t-pack').hidden = !f.esp || f.esp === NONE;
   const box = $('#t-list');
   if (!arr.length) {
     box.replaceChildren(h('p', { class: 'empty-state' }, inEsp.length ? 'Ningún tema coincide con estos filtros.'
@@ -1922,7 +1828,7 @@ function renderLists() { renderCasos(); renderRes(); if (S.tab === 'prac') rende
 /* ---------------- Eventos ---------------- */
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 function bindEvents() {
-  bindBibEvents();
+  bindBibEvents(); bindEstudioEvents();
   $$('.tabbar button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   $('#syncBtn').addEventListener('click', () => { if (S.cfg.endpoint) sync(); else showTab('cfg'); });
   $('#lockBtn').addEventListener('click', async () => { await setRemember(false); lock(); });
@@ -1931,13 +1837,13 @@ function bindEvents() {
   // Mis casos
   fillSelect($('#c-tipo'), 'Tipos', TIPOS, '');
   $('#c-q').addEventListener('input', debounce(e => { S.fc.q = e.target.value; renderCasos(); }, 120));
-  for (const [id, k] of [['#c-estado', 'estado'], ['#c-tipo', 'tipo'], ['#c-org', 'organo'], ['#c-sub', 'subtema'], ['#c-mes', 'mes']])
+  for (const [id, k] of [['#c-estado', 'estado'], ['#c-tipo', 'tipo'], ['#c-org', 'organo'], ['#c-sub', 'subtema'], ['#c-mes', 'mes'], ['#c-cla', 'clasif']])
     $(id).addEventListener('change', e => { S.fc[k] = e.target.value; renderCasos(); });
   $('#c-orden').addEventListener('click', () => { S.fc.dir *= -1; renderCasos(); });
 
   // Residentes
   $('#r-q').addEventListener('input', debounce(e => { S.fr.q = e.target.value; renderRes(); }, 120));
-  for (const [id, k] of [['#r-resid', 'residente'], ['#r-org', 'organo'], ['#r-sub', 'subtema'], ['#r-mes', 'mes']])
+  for (const [id, k] of [['#r-resid', 'residente'], ['#r-org', 'organo'], ['#r-sub', 'subtema'], ['#r-mes', 'mes'], ['#r-cla', 'clasif']])
     $(id).addEventListener('change', e => { S.fr[k] = e.target.value; renderRes(); });
   $('#r-orden').addEventListener('click', () => { S.fr.dir *= -1; renderRes(); });
   $('#r-file').addEventListener('change', e => { const f = e.target.files[0]; if (f) onImportFile(f, 'residentes'); });
@@ -1950,10 +1856,6 @@ function bindEvents() {
   });
 
   // Práctica
-  for (const [id, k] of [['#p-org', 'organo'], ['#p-sub', 'subtema'], ['#p-mes', 'mes'], ['#p-src', 'src'], ['#p-orden', 'orden'], ['#p-n', 'n']])
-    $(id).addEventListener('change', e => { S.fp[k] = e.target.value; renderPrac(); });
-  $('#p-hide').addEventListener('change', e => { S.fp.hide = e.target.checked; });
-  $('#p-start').addEventListener('click', startFromFilters);
   $('#t-file').addEventListener('change', e => { const f = e.target.files[0]; if (f) onTemarioFile(f); });
   $('#t-paste').addEventListener('click', openPaste);
   $('#t-add').addEventListener('click', () => openTopic(null));

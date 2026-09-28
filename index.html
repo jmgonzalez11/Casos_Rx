@@ -23,6 +23,7 @@
 <script src="temario.js" defer></script>
 <script src="lit.js" defer></script>
 <script src="biblioteca.js" defer></script>
+<script src="estudio.js" defer></script>
 </head>
 <body class="locked">
 
@@ -90,6 +91,13 @@
           <button type="button" class="link sm" id="f-reauto" hidden>Volver a clasificar automáticamente</button>
         </fieldset>
 
+        <div class="field">
+          <label class="lbl" for="f-cla">Clasificaciones <span class="sub">opcional</span></label>
+          <input id="f-cla" type="text" list="dl-f-cla" autocomplete="off" placeholder="p. ej. Bosniak IIF, LI-RADS 5">
+          <datalist id="dl-f-cla"></datalist>
+          <p class="hint info" id="claHint"></p>
+        </div>
+
         <fieldset class="field">
           <legend>Modalidad <span class="sub">una o varias</span></legend>
           <div class="chips" id="f-mod"></div>
@@ -127,6 +135,7 @@
             <select id="c-org" aria-label="Órgano"></select>
             <select id="c-sub" aria-label="Subtema"></select>
             <select id="c-mes" aria-label="Mes de rotación"></select>
+            <select id="c-cla" aria-label="Clasificación"></select>
             <select id="c-estado" aria-label="Estado de presentación">
               <option value="">Mostrados o no</option>
               <option value="pend">Por mostrar</option>
@@ -142,38 +151,61 @@
 
     <!-- ============ PRÁCTICA ============ -->
     <section id="view-prac" class="view" hidden>
-
       <div id="p-setup">
-        <div class="espbar" id="p-esp" role="group" aria-label="Especialidad"></div>
-        <div class="filters">
-          <select id="p-org" aria-label="Órgano"></select>
-          <select id="p-sub" aria-label="Subtema"></select>
-          <select id="p-mes" aria-label="Mes de rotación"></select>
-          <select id="p-src" aria-label="Casos a usar">
-            <option value="all">Todos los casos</option>
-            <option value="mine">Mis casos</option>
-            <option value="res">Residentes</option>
-          </select>
-          <select id="p-orden" aria-label="Orden">
-            <option value="prio">Prioridad</option>
-            <option value="azar">Al azar</option>
-            <option value="fecha">Recientes</option>
-          </select>
-          <select id="p-n" aria-label="Cantidad de casos">
-            <option value="10">10 casos</option>
-            <option value="20" selected>20 casos</option>
-            <option value="50">50 casos</option>
-            <option value="all">Todos</option>
-          </select>
+        <div id="p-plan"></div>
+
+        <div class="todaybox">
+          <div class="espbar" id="p-esp" role="group" aria-label="Especialidad"></div>
+          <details class="more">
+            <summary>Filtros <span class="nf" id="p-nf" hidden></span></summary>
+            <div class="filters">
+              <select id="p-org" aria-label="Órgano"></select>
+              <select id="p-sub" aria-label="Subtema"></select>
+              <select id="p-mes" aria-label="Mes de rotación"></select>
+              <select id="p-cla" aria-label="Clasificación"></select>
+              <select id="p-src" aria-label="Casos a usar">
+                <option value="all">Todos los casos</option>
+                <option value="mine">Mis casos</option>
+                <option value="res">Residentes</option>
+              </select>
+            </div>
+          </details>
+          <p class="today" id="p-today-txt"></p>
+          <div class="btnrow">
+            <button type="button" class="btn primary big" id="p-today">Repasar lo de hoy</button>
+            <button type="button" class="btn" id="p-short">Sesión corta (10)</button>
+          </div>
+          <label class="check"><input type="checkbox" id="p-oral"> Modo oral con temporizador de
+            <select id="p-oralsec" class="inline" aria-label="Tiempo por caso"><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option></select></label>
+          <label class="check"><input type="checkbox" id="p-hide"> Ocultar órgano y subtema hasta mostrar la respuesta</label>
         </div>
-        <label class="check"><input type="checkbox" id="p-hide"> Ocultar órgano y subtema hasta mostrar la respuesta</label>
-        <p class="hint">Prioridad: primero los casos nunca practicados, luego los que más fallas y los que no repasas hace tiempo.</p>
-        <p class="count" id="p-count"></p>
-        <button type="button" class="btn primary big" id="p-start">Empezar práctica</button>
+
+        <details class="more">
+          <summary>Práctica libre y ajustes de repaso</summary>
+          <div class="freebox">
+            <div class="filters">
+              <select id="p-orden" aria-label="Orden">
+                <option value="prio">Lo más olvidado primero</option>
+                <option value="azar">Al azar</option>
+                <option value="fecha">Recientes</option>
+              </select>
+              <select id="p-n" aria-label="Cantidad de casos">
+                <option value="10">10 casos</option>
+                <option value="20" selected>20 casos</option>
+                <option value="50">50 casos</option>
+                <option value="all">Todos</option>
+              </select>
+            </div>
+            <p class="count" id="p-count"></p>
+            <button type="button" class="btn" id="p-start">Practicar con estos filtros</button>
+            <label class="check">Casos nuevos por día
+              <select id="p-newday" class="inline" aria-label="Casos nuevos por día"><option>5</option><option>10</option><option selected>15</option><option>20</option><option>30</option><option>50</option></select></label>
+            <p class="hint">Repetición espaciada (FSRS): cada caso vuelve justo antes de que lo olvides. «Otra vez» lo repite en la misma sesión y mañana; «Difícil», «Bien» y «Fácil» lo espacian cada vez más.</p>
+          </div>
+        </details>
       </div>
 
       <div id="p-session" hidden></div>
-
     </section>
 
     <!-- ============ TEMARIO ============ -->
@@ -201,6 +233,7 @@
         <div id="t-list"></div>
         <div class="btnrow">
           <button type="button" class="btn" id="t-assign">Asignar mes a mis casos sin mes</button>
+          <button type="button" class="btn" id="t-pack">Exportar paquete de estudio</button>
           <button type="button" class="btn" id="t-export">Exportar temario (CSV)</button>
           <button type="button" class="btn danger" id="t-clear">Borrar temario de esta especialidad</button>
         </div>
@@ -248,6 +281,7 @@
             <select id="r-org" aria-label="Órgano"></select>
             <select id="r-sub" aria-label="Subtema"></select>
             <select id="r-mes" aria-label="Mes de rotación"></select>
+            <select id="r-cla" aria-label="Clasificación"></select>
           </div>
         </details>
       </div>

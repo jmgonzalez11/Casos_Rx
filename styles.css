@@ -311,3 +311,38 @@ dialog.viewer::backdrop{background:#000}
 .vcap{margin:4px 0;font-size:.95rem;line-height:1.45;max-height:30vh;overflow:auto}
 .vmeta{margin:0 0 10px;font-size:.8rem;color:#9aa7b3}
 .viewer .hint{color:#9aa7b3;margin:0 0 8px}
+
+/* ---------- práctica: hoy, modo oral, plan ---------- */
+.todaybox{display:grid;gap:10px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.today{margin:2px 0 0;font-size:.95rem}
+.freebox{display:grid;gap:10px;padding:0 10px 12px}
+.grades{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:4px}
+.btn.grade{display:flex;flex-direction:column;gap:2px;min-height:56px;padding:6px 4px;font-size:.9rem}
+.btn.grade small{font-weight:500;font-size:.72rem;color:var(--muted)}
+.btn.grade.g1{border-color:color-mix(in srgb,var(--danger) 50%,var(--line))}
+.btn.grade.g3,.btn.grade.g4{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.btn.grade.sug{outline:3px solid var(--accent);outline-offset:1px}
+.ptimer{font-variant-numeric:tabular-nums;font-weight:700;color:var(--text);font-size:1rem}
+.ptimer.warn{color:var(--warn)}
+.ptimer.late{color:var(--danger)}
+.oralref{margin:0 0 12px;padding:12px 14px;border-radius:10px;border:1px dashed var(--line)}
+.oralref .rsub{margin:8px 0 0;font-weight:650;font-size:.88rem}
+.oralcheck{margin:0 0 10px}
+.oralcheck .lbl{margin-bottom:6px}
+.chip.ok,.chip.ok[aria-pressed=true]{background:color-mix(in srgb,var(--ok) 18%,var(--surface));border-color:var(--ok);color:var(--text)}
+.pprog .badge{margin-left:6px}
+#p-plan:empty{display:none}
+.plan{display:grid;gap:8px}
+.plancard{display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.plancard.empty{grid-template-columns:1fr auto;align-items:center}
+.plancard.empty p{margin:4px 0 0;font-size:.88rem}
+.plancard p{margin:0}
+.plancard .lbl{margin-top:4px}
+.plancard ul.plain{margin:0}
+.planhead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.planhead p{margin:2px 0 0;font-size:.88rem}
+.countdown{display:flex;flex-direction:column;align-items:center;min-width:56px;padding:6px 8px;border-radius:10px;background:var(--sunken);font-size:1.4rem;font-weight:750;line-height:1;font-variant-numeric:tabular-nums}
+.countdown small{font-size:.66rem;font-weight:600;color:var(--muted);margin-top:3px}
+.countdown.soon{background:color-mix(in srgb,var(--warn) 22%,var(--surface))}
+.planrow{display:flex;justify-content:space-between;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.chip.static{pointer-events:none}
