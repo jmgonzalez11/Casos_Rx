@@ -267,7 +267,7 @@ function renderPlan() {
     const covRows = (ex.esps || []).map(esp => {
       const temas = live(S.tem).filter(tm => tm.especialidad === esp);
       if (!temas.length) return h('li', {}, h('strong', {}, esp), ': sin temario cargado.');
-      const sinC = temas.filter(tm => !(cov.get(tm.id) || []).length).length, sinL = temas.filter(tm => !lcov.get(tm.id)).length;
+      const sinC = temas.filter(tm => !topicCases(tm).length).length, sinL = temas.filter(tm => !lcov.get(tm.id)).length;
       return h('li', {}, h('strong', {}, esp), `: ${temas.length} temas · ${sinC} sin casos · ${sinL} sin literatura `,
         sinC ? h('button', { type: 'button', class: 'link sm inline', onclick: () => { S.ft.esp = esp; S.ft.cov = 'sin'; S.ft.mes = ''; S.topicPage = null; $('#t-cov').value = 'sin'; showTab('tem'); } }, 'ver') : null);
     });
@@ -363,7 +363,8 @@ const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 function packItems(scope) {
   const esps = new Set(scope.esps || []), temas = scope.temaIds ? new Set(scope.temaIds) : null;
   const ok = (esp, tema) => esps.has(esp) && (!temas || (tema && temas.has(tema.id)));
-  const casos = pracPool('all').filter(c => ok(c.x.especialidad, eff(c.x).tema));
+  let casos = pracPool('all').filter(c => ok(c.x.especialidad, eff(c.x).tema));
+  if (temas) { const m = new Map(casos.map(c => [c.id, c])); for (const tid of temas) for (const c of topicCases(S.tem.get(tid))) m.set(c.id, c); casos = [...m.values()]; }
   const imgs = live(S.img).filter(x => ok(x.especialidad, litEff(x).tema));
   const notas = live(S.nota).filter(x => ok(x.especialidad, litEff(x).tema));
   return { casos, imgs, notas };

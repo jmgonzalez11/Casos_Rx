@@ -104,7 +104,7 @@ async function openViewer(list, i) {
 /* ---------- Página de un tema: todo lo asociado ---------- */
 function renderTopicPage(id) {
   const t = S.tem.get(id), box = $('#t-page');
-  const cc = temCls(t), cases = coverage().get(id) || [], lc = litCoverage().get(id) || { imgs: [], notas: [] };
+  const cc = temCls(t), lc = litCoverage().get(id) || { imgs: [], notas: [] };
   const byDis = new Map();
   for (const n of lc.notas) { const k = enfKey(n.enfermedad); if (!byDis.has(k)) byDis.set(k, []); byDis.get(k).push(n); }
   $('#title').textContent = 'Tema';
@@ -115,16 +115,10 @@ function renderTopicPage(id) {
     t.detalle ? h('p', { class: 'tdet' }, t.detalle) : null,
     t.fuente ? h('p', { class: 'hint' }, 'Fuente: ' + t.fuente) : null,
     h('div', { class: 'btnrow tight' },
-      cases.length ? h('button', { type: 'button', class: 'btn primary sm', onclick: () => { showTab('prac'); startPractice(cases); } }, `Practicar ${cases.length} caso${cases.length > 1 ? 's' : ''}`) : null,
       h('button', { type: 'button', class: 'btn sm', onclick: () => openTopic(id) }, 'Editar tema'),
       h('button', { type: 'button', class: 'btn sm', onclick: () => openMaterialPicker({ esp: t.especialidad, temaId: id }) }, 'Agregar literatura'),
       h('button', { type: 'button', class: 'btn sm', onclick: () => openPackDialog({ title: t.tema, esps: [t.especialidad], temaIds: [id] }) }, 'Exportar paquete')),
-    h('h3', { class: 'psech' }, `Casos (${cases.length})`),
-    cases.length ? h('ol', { class: 'list' }, ...cases.sort((a, b) => byFecha(-1)(a.x, b.x)).map(c => h('li', { class: 'row trow', style: { '--esp': espColor(c.x.especialidad) } },
-      h('button', { type: 'button', class: 'rbody', onclick: () => (c.col === 'casos' ? openCaseDetail(c.id) : openResDetail(c.id)) },
-        h('div', { class: 'l1' }, h('span', { class: 'date' }, c.x.fecha ? isoToDisp(c.x.fecha) : 'Sin fecha'), h('span', { class: 'rut' + (c.x.rut ? '' : ' none') }, c.x.rut || 'Sin RUT'),
-          h('span', { class: 'tipo' }, c.col === 'casos' ? 'Mío' : (c.x.residente || 'Residente'))),
-        h('div', { class: 'dx' }, c.x.diagnostico || 'Sin diagnóstico'))))) : h('p', { class: 'empty-state sm' }, 'Aún no hay casos para este tema.'),
+    relatedBox(t),
     h('h3', { class: 'psech' }, `Imágenes de literatura (${lc.imgs.length})`),
     lc.imgs.length ? gallery(lc.imgs) : h('p', { class: 'empty-state sm' }, 'Sin imágenes. Agrega un PDF de STATdx, Radiopaedia o un paper en Biblioteca.'),
     h('h3', { class: 'psech' }, `Enfermedades y fuentes (${lc.notas.length})`),
@@ -132,6 +126,57 @@ function renderTopicPage(id) {
       h('button', { type: 'button', class: 'rbody', onclick: () => { S.bibPage = k; showTab('bib'); } },
         h('div', { class: 'dx' }, ns[0].enfermedad || 'Sin nombre'),
         h('div', { class: 'meta' }, ns.map(fuenteLabel).join(' · ')))))) : h('p', { class: 'empty-state sm' }, 'Sin textos de enfermedades para este tema.')));
+}
+
+/* ---------- Casos relacionados del tema: desplegable, búsqueda, vistos ---------- */
+S.relOpen = S.relOpen || {};
+function relatedBox(t) {
+  const id = t.id, rel = t.rel || {};
+  const cases = topicCases(t).sort((a, b) => byFecha(-1)(a.x, b.x));
+  const vistos = cases.filter(c => c.x.visto), noV = cases.filter(c => !c.x.visto), split = !!S.cfg.splitVistos;
+  const row = c => {
+    const cb = h('input', { type: 'checkbox', 'aria-label': 'Visto' }); cb.checked = !!c.x.visto;
+    cb.addEventListener('change', async () => { await setVisto(c.col, c.id, cb.checked); renderTopicPage(id); });
+    return h('li', { class: 'row relrow' + (c.x.visto ? ' done' : ''), style: { '--esp': espColor(c.x.especialidad) } },
+      h('label', { class: 'vis', title: 'Marcar como visto' }, cb),
+      h('button', { type: 'button', class: 'rbody', onclick: () => (c.col === 'casos' ? openCaseDetail(c.id) : openResDetail(c.id)) },
+        h('div', { class: 'l1' }, h('span', { class: 'date' }, c.x.fecha ? isoToDisp(c.x.fecha) : 'Sin fecha'),
+          h('span', { class: 'rut' + (c.x.rut ? '' : ' none') }, c.x.rut || 'Sin RUT'),
+          h('span', { class: 'tipo' }, c.col === 'casos' ? 'Mío' : (c.x.residente || 'Residente')),
+          c.x.especialidad !== t.especialidad ? h('span', { class: 'badge' }, c.x.especialidad) : null),
+        h('div', { class: 'dx' }, c.x.diagnostico || 'Sin diagnóstico')),
+      h('button', { type: 'button', class: 'iconx', title: 'Quitar de este tema', 'aria-label': 'Quitar de este tema', onclick: async () => {
+        await removeFromTopic(id, c.id); toast('Caso quitado de este tema (no volverá a agregarse)'); renderTopicPage(id);
+      } }, '×'));
+  };
+  const list = (arr, empty) => arr.length ? h('ol', { class: 'list' }, ...arr.map(row)) : h('p', { class: 'empty-state sm' }, empty);
+  const splitCb = h('input', { type: 'checkbox' }); splitCb.checked = split;
+  splitCb.addEventListener('change', async () => { S.cfg.splitVistos = splitCb.checked; await saveCfg(); renderTopicPage(id); });
+  const btn = h('button', { type: 'button', class: 'btn primary sm', onclick: async ev => {
+    busy(ev.currentTarget, true, 'Buscando…');
+    try {
+      const r = await searchTopicCases(id);
+      toast(r.added ? `${r.added} caso${r.added > 1 ? 's' : ''} nuevo${r.added > 1 ? 's' : ''} para este tema (se revisaron ${r.n})` : `Sin casos nuevos (se revisaron ${r.n}; ${r.kept} ya estaban)`);
+    } catch (e) { toast('No se pudo buscar: ' + e.message, true); }
+    finally { busy(ev.currentTarget, false); }
+    S.relOpen[id] = true; renderTopicPage(id);
+  } }, rel.ts ? 'Actualizar casos relacionados' : 'Buscar casos relacionados');
+  const box = h('details', { class: 'relbox', open: S.relOpen[id] !== false },
+    h('summary', {}, h('span', {}, `Casos relacionados (${cases.length})`), cases.length ? h('span', { class: 'cnt' }, `${vistos.length} visto${vistos.length === 1 ? '' : 's'} · ${noV.length} sin ver`) : null),
+    h('div', { class: 'relbody' },
+      h('div', { class: 'reltools' }, btn, h('label', { class: 'check' }, splitCb, ' Separar vistos y no vistos')),
+      h('p', { class: 'hint' }, rel.ts
+        ? `Última búsqueda: ${fmtDT(rel.ts)} (${rel.n} casos revisados). Los casos ya encontrados se mantienen; al actualizar se agregan los nuevos. «×» quita un caso de este tema.`
+        : 'Busca en tus casos y en los de residentes los relacionados con este tema (por diagnóstico, notas, examen, región y subtema) y los deja guardados en el tema.'),
+      split
+        ? [h('h4', { class: 'relh' }, `No vistos (${noV.length})`), list(noV, 'Todos los casos de este tema están vistos.'),
+          h('h4', { class: 'relh' }, `Vistos (${vistos.length})`), list(vistos, 'Aún no marcas casos como vistos.')]
+        : list(cases, rel.ts ? 'No encontré casos para este tema. Actualiza cuando agregues casos nuevos.' : 'Aún no hay casos asociados. Toca «Buscar casos relacionados».'),
+      cases.length ? h('div', { class: 'btnrow tight' },
+        noV.length ? h('button', { type: 'button', class: 'btn sm', onclick: () => { showTab('prac'); startPractice(noV); } }, `Practicar no vistos (${noV.length})`) : null,
+        h('button', { type: 'button', class: 'btn sm', onclick: () => { showTab('prac'); startPractice(cases); } }, `Practicar todos (${cases.length})`)) : null));
+  box.addEventListener('toggle', () => { S.relOpen[id] = box.open; });
+  return box;
 }
 
 /* ---------- Biblioteca ---------- */

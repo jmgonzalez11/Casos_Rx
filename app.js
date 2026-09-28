@@ -7,7 +7,7 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
-const APP_VERSION = '3.3';
+const APP_VERSION = '3.5';
 
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
@@ -1450,6 +1450,66 @@ function coverage() {
   _cov = { key, m };
   return m;
 }
+/* ---------------- Casos relacionados con cada tema (búsqueda guardada en el tema) ----------------
+   t.rel = { ids: [casos encontrados], excl: [casos quitados a mano], ts, n }. Los encontrados se mantienen;
+   al actualizar solo se agregan casos nuevos y nunca vuelven los que quitaste. */
+let _relIdf = null;
+function relIdf() {
+  if (_relIdf && _relIdf.v === TEM_V) return _relIdf;
+  const df = {}, all = live(S.tem);
+  for (const t of all) for (const w of stems(t.tema + ' ' + (t.detalle || ''))) df[w] = (df[w] || 0) + 1;
+  const N = Math.max(all.length, 1);
+  return (_relIdf = { v: TEM_V, N, f: w => Math.log(1 + N / (df[w] || 1)), strong: Math.log(1 + N / 15) });
+}
+const caseText = x => [x.diagnostico, x.notas, x.examen, x.categoria].filter(Boolean).join('. ');
+/** Puntaje de un caso para un tema: palabras distintivas compartidas (ponderadas por rareza en el temario) + región y subtema. */
+function relScore(t, tc, x, e, I) {
+  const tst = stems(t.tema + ' ' + (t.detalle || '')), cst = stems(caseText(x));
+  let st = 0, strong = false;
+  for (const w of cst) if (tst.has(w)) { const v = I.f(w); st += v; if (v >= I.strong) strong = true; }
+  const sameEsp = x.especialidad === t.especialidad;
+  const orgEq = !!(tc.organo && e.organo && tc.organo === e.organo), subEq = !!(tc.subtema && e.subtema === tc.subtema);
+  const orgNe = sameEsp && tc.organo && e.organo && tc.organo !== e.organo;
+  if (st && (strong || st >= 6)) { const s = st + (orgEq ? 1 : 0) + (subEq ? 1 : 0) + (sameEsp ? 0.5 : 0) - (orgNe ? 1.5 : 0); return s >= 3 ? s : 0; }
+  if (!st && sameEsp && orgEq && subEq) return 1.5;                                // misma región y tipo de patología
+  return 0;
+}
+const colOfId = id => (id.startsWith('c_') ? 'casos' : id.startsWith('r_') ? 'residentes' : '');
+/** Casos del tema: los guardados por la búsqueda + los que la app asocia automáticamente, menos los quitados. */
+function topicCases(t) {
+  if (!t) return [];
+  const rel = t.rel || {}, excl = new Set(rel.excl || []), out = new Map();
+  for (const id of rel.ids || []) {
+    if (excl.has(id)) continue;
+    const col = colOfId(id), x = col && mapOf(col).get(id);
+    if (x && !x.deleted) out.set(id, { col, id, x, saved: true });
+  }
+  for (const c of coverage().get(t.id) || []) if (!excl.has(c.id) && !out.has(c.id)) out.set(c.id, { ...c, saved: false });
+  return [...out.values()];
+}
+async function searchTopicCases(id) {
+  const t = S.tem.get(id), tc = temCls(t), I = relIdf();
+  const rel = { ids: [], excl: [], ...(t.rel || {}) };
+  const have = new Set([...(rel.ids || []), ...(rel.excl || [])]), ids = [...(rel.ids || [])];
+  const pool = pracPool('all');
+  let added = 0;
+  for (const c of pool) {
+    if (have.has(c.id)) continue;
+    if (relScore(t, tc, c.x, eff(c.x), I) > 0) { ids.push(c.id); have.add(c.id); added++; }
+  }
+  for (const c of coverage().get(id) || []) if (!have.has(c.id)) { ids.push(c.id); have.add(c.id); added++; }
+  await saveRecord('temario', { ...t, rel: { ids, excl: rel.excl || [], ts: Date.now(), n: pool.length } });
+  return { added, kept: ids.length - added, n: pool.length };
+}
+async function removeFromTopic(id, caseId) {
+  const t = S.tem.get(id), rel = { ids: [], excl: [], ...(t.rel || {}) };
+  await saveRecord('temario', { ...t, rel: { ...rel, ids: (rel.ids || []).filter(x => x !== caseId), excl: [...new Set([...(rel.excl || []), caseId])] } });
+}
+async function setVisto(col, caseId, on) {
+  const x = mapOf(col).get(caseId); if (!x) return;
+  await saveRecord(col, { ...x, visto: on ? Date.now() : 0 });
+}
+
 function renderTem() {
   if (S.topicPage && S.tem.get(S.topicPage) && !S.tem.get(S.topicPage).deleted) { $('#t-main').hidden = true; $('#t-page').hidden = false; return renderTopicPage(S.topicPage); }
   S.topicPage = null; $('#t-main').hidden = false; $('#t-page').hidden = true;
@@ -1459,7 +1519,7 @@ function renderTem() {
   const nl = t => { const c = lcov.get(t.id); return c ? c.imgs.length + c.notas.length : 0; };
   const inEsp = all.filter(t => espOk(f.esp, t.especialidad));
   f.mes = fillSelect($('#t-mes'), 'Meses', mesVals(inEsp.map(t => t.mes)), f.mes, v => 'Mes ' + v, inEsp.some(t => !t.mes) ? [['_', 'Sin mes']] : []);
-  const n = t => (cov.get(t.id) || []).length;
+  const n = t => topicCases(t).length;
   const covOk = t => f.cov === '' || (f.cov === 'con' && n(t) > 0) || (f.cov === 'sin' && !n(t)) || (f.cov === 'lit' && nl(t) > 0) || (f.cov === 'nolit' && !nl(t));
   const arr = inEsp.filter(t => (!f.mes || (f.mes === '_' ? !t.mes : String(t.mes) === f.mes)) && covOk(t)).sort(temSort);
   const withC = inEsp.filter(t => n(t) > 0).length;
@@ -1514,7 +1574,7 @@ function openTopic(id) {
   fillOS();
   espSel.addEventListener('change', () => { t.organo = ''; t.subtema = ''; fillOS(); });
   temaEl.addEventListener('input', debounce(fillOS, 300));
-  const rel = isNew ? [] : (coverage().get(id) || []);
+  const rel = isNew ? [] : topicCases(S.tem.get(id));
   d.replaceChildren(h('div', { class: 'dlg' },
     h('h2', {}, isNew ? 'Nuevo tema' : 'Tema del temario'),
     h('div', { class: 'formgrid' },

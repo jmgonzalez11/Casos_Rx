@@ -420,12 +420,14 @@ const STOP = new Set(('de la el los las del y en con por para sin una uno unos u
   'diagnostica diferencial diferenciales enfermedad enfermedades patologia patologias lesion lesiones anatomia normal generalidades introduccion ' +
   'clase manejo aspectos principales conceptos basicos tecnica radiologia radiologico radiologica imagenologia rol utilidad mes semana tema temas ' +
   'parte partes vs versus the and of lesiones asociada asociadas asociado asociados completa completo parcial aguda agudo agudos agudas ' +
-  'cronica cronico bilateral derecha derecho izquierda izquierdo signo signos control').split(' '));
+  'cronica cronico bilateral derecha derecho izquierda izquierdo signo signos control grado grados bajo baja alto alta leve moderado ' +
+  'moderada severo severa extenso extensa grande gran pequeno pequena multiple multiples unico unica aislado aislada').split(' '));
 function stems(text) {
   const out = new Set();
   for (const w of norm(text).split(/[^a-z0-9]+/)) {
     if (w.length < 3 || STOP.has(w) || /^\d+$/.test(w)) continue;
-    out.add(w.length > 6 ? w.slice(0, 6) : w);
+    const b = w.length > 5 ? w.replace(/(?:es|s)$/, '') : w;           // plural → singular («tumores» = «tumor»)
+    out.add(b.length > 7 ? b.slice(0, 7) : b);                          // 7 letras: «condrosarcoma» ≠ «condroblastoma»
   }
   return out;
 }

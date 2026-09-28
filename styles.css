@@ -350,3 +350,21 @@ dialog.viewer::backdrop{background:#000}
 .pvitem.dup>span{color:var(--muted)}
 .pvitem .badge{margin-left:6px}
 .tdet{margin:0;font-size:.9rem;line-height:1.45;white-space:pre-line}
+
+/* ---------- casos relacionados del tema ---------- */
+details.relbox{border:1px solid var(--line);border-radius:14px;background:var(--surface);margin-top:6px}
+details.relbox>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:12px 14px;font-weight:700;cursor:pointer;list-style:none}
+details.relbox>summary::-webkit-details-marker{display:none}
+details.relbox>summary::after{content:"";margin-left:auto;align-self:center;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s}
+details.relbox[open]>summary::after{transform:rotate(225deg) translateY(-2px)}
+details.relbox>summary .cnt{font-weight:500;font-size:.85rem;color:var(--muted)}
+.relbody{display:grid;gap:10px;padding:0 12px 12px}
+.reltools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.relbody .hint{margin:0}
+.relh{margin:6px 2px 0;font-size:.9rem}
+.relrow{grid-template-columns:auto minmax(0,1fr) auto}
+.relrow .vis{display:flex;align-items:center;padding:0 4px 0 12px;cursor:pointer}
+.relrow .vis input{width:20px;height:20px;accent-color:var(--accent)}
+.relrow.done .dx{color:var(--muted)}
+.iconx{align-self:center;margin-right:6px;width:32px;height:32px;border:0;border-radius:8px;background:none;color:var(--muted);font-size:1.3rem;line-height:1;cursor:pointer}
+.iconx:hover{background:var(--sunken);color:var(--danger)}
