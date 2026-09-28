@@ -213,11 +213,11 @@
       <div id="t-main">
         <div class="btnrow tight">
           <label class="btn primary" for="t-file">Importar temario</label>
-          <input type="file" id="t-file" class="visually-hidden" accept=".pdf,.docx,.pptx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.html,.htm">
+          <input type="file" id="t-file" class="visually-hidden" multiple accept=".pdf,.doc,.docx,.pptx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.html,.htm">
           <button type="button" class="btn" id="t-paste">Pegar texto</button>
           <button type="button" class="btn" id="t-add">Agregar tema</button>
         </div>
-        <p class="hint">PDF, Word, PowerPoint, Excel, CSV o texto. Si el PDF es una imagen escaneada, pega el texto o pídele a Claude que lo convierta.</p>
+        <p class="hint">Puedes elegir varios archivos a la vez: PDF, Word (.doc o .docx), PowerPoint, Excel, CSV o texto. La app detecta meses y especialidad (también por el nombre del archivo), resume los objetivos en temas y marca los repetidos. Un PDF escaneado no tiene texto: pega el texto o pídele a Claude que lo convierta.</p>
         <div class="espbar" id="t-esp" role="group" aria-label="Especialidad"></div>
         <div class="filters">
           <select id="t-mes" aria-label="Mes"></select>

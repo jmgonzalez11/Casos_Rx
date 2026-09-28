@@ -7,7 +7,7 @@
      solo recibe texto cifrado.
    ===================================================================== */
 
-const APP_VERSION = '3.1';
+const APP_VERSION = '3.3';
 
 /* ---------------- Catálogos ---------------- */
 const ESPECIALIDADES = ['Negato', 'TC de cuerpo', 'MR de cuerpo', 'Ecografía gris', 'Ecografía Doppler',
@@ -765,7 +765,9 @@ function autoClassify() {
   const det = detectClasif(text);
   $('#claHint').textContent = !$('#f-cla').value.trim() && det.length ? `Detectado en el diagnóstico: ${det.join(', ')} (se guarda solo; escribe aquí para reemplazarlo).` : '';
   const hasTem = live(S.tem).some(t => t.especialidad === F.esp);
-  if (m) mh.textContent = `Según el temario${m.tema.mes ? `, mes ${m.tema.mes}` : ''}: «${m.tema.tema}»` + (F.touched.mes && m.tema.mes && String(m.tema.mes) !== F.mes ? '. Elegiste otro mes.' : '');
+  const otros = m ? [...new Set(live(S.tem).filter(t => t.especialidad === F.esp && t.mes && String(t.mes) !== String(m.tema.mes) && similar(t.tema, m.tema.tema, F.esp)).map(t => t.mes))].sort() : [];
+  if (m) mh.textContent = `Según el temario${m.tema.mes ? `, mes ${m.tema.mes}` : ''}: «${m.tema.tema}»` + (otros.length ? ` (también en mes ${otros.join(' y ')}; elige el que corresponda)` : '') +
+    (F.touched.mes && m.tema.mes && String(m.tema.mes) !== F.mes ? '. Elegiste otro mes.' : '');
   else mh.textContent = !text ? '' : hasTem ? 'Sin coincidencia clara con el temario.' : 'Carga el temario de esta especialidad (en Práctica) para sugerir el mes.';
   refreshForm();
 }
@@ -1425,8 +1427,8 @@ function exportRes() {
 }
 function exportTemario() {
   const arr = live(S.tem).sort(temSort);
-  downloadCSV(`temario_${todayIso()}.csv`, ['Especialidad', 'Mes', 'Órgano', 'Subtema', 'Tema'],
-    arr.map(t => { const c = temCls(t); return [t.especialidad, t.mes, c.organo, c.subtema, t.tema]; }));
+  downloadCSV(`temario_${todayIso()}.csv`, ['Especialidad', 'Mes', 'Órgano', 'Subtema', 'Tema', 'Detalle', 'Fuente'],
+    arr.map(t => { const c = temCls(t); return [t.especialidad, t.mes, c.organo, c.subtema, t.tema, t.detalle || '', t.fuente || '']; }));
 }
 
 /* ---------------- Práctica: ver estudio.js ---------------- */
@@ -1500,6 +1502,7 @@ function openTopic(id) {
   const espSel = h('select', { 'aria-label': 'Especialidad' }, ...ESPECIALIDADES.map(e => h('option', { value: e }, e)));
   espSel.value = t.especialidad;
   const temaEl = h('textarea', { rows: '3', 'aria-label': 'Tema' }); temaEl.value = t.tema;
+  const detEl = h('textarea', { rows: '3', 'aria-label': 'Detalle', placeholder: 'Objetivo completo, entidades incluidas, bibliografía…' }); detEl.value = t.detalle || '';
   const mesSel = h('select', { 'aria-label': 'Mes' }, ...mesOptions(t.mes)); mesSel.value = String(t.mes || '');
   const orgSel = h('select', { 'aria-label': 'Órgano' }), subSel = h('select', { 'aria-label': 'Subtema' });
   const fillOS = () => {
@@ -1516,6 +1519,7 @@ function openTopic(id) {
     h('h2', {}, isNew ? 'Nuevo tema' : 'Tema del temario'),
     h('div', { class: 'formgrid' },
       h('label', { class: 'lbl' }, 'Tema'), temaEl,
+      h('label', { class: 'lbl' }, 'Detalle'), detEl,
       isNew ? [h('label', { class: 'lbl' }, 'Especialidad'), espSel] : null,
       h('label', { class: 'lbl' }, 'Mes'), mesSel,
       h('label', { class: 'lbl' }, 'Órgano'), orgSel,
@@ -1533,21 +1537,28 @@ function openTopic(id) {
       h('button', { type: 'button', class: 'btn primary', onclick: async () => {
         const tema = temaEl.value.replace(/\s+/g, ' ').trim();
         if (!tema) { toast('Escribe el tema', true); return; }
-        await saveRecord('temario', { ...t, especialidad: espSel.value, tema, mes: mesSel.value, organo: orgSel.value, subtema: subSel.value, orden: t.orden ?? Date.now() });
+        await saveRecord('temario', { ...t, especialidad: espSel.value, tema, detalle: detEl.value.trim(), mes: mesSel.value, organo: orgSel.value, subtema: subSel.value, orden: t.orden ?? Date.now() });
         d.close(); renderTem(); toast('Tema guardado');
       } }, 'Guardar'))));
   d.showModal();
 }
 
-async function onTemarioFile(file) {
+async function onTemarioFile(files) {
+  files = [...files];
   try {
-    toast('Leyendo el temario…');
-    const r = await extractTemario(file);
-    const parsed = r.items
-      ? { items: r.items, monthsFound: r.items.some(i => i.mes), espsFound: [...new Set(r.items.map(i => i.esp).filter(Boolean))] }
-      : parseTemarioLines(r.lines);
-    if (!parsed.items.length) throw new Error('No encontré temas en el archivo');
-    openTemPreview(parsed, file.name);
+    const all = [], esps = new Set(), names = [];
+    let monthsFound = false;
+    for (const file of files) {
+      toast(`Leyendo ${file.name}…`);
+      const r = await extractTemario(file), hints = { ...hintsFromName(file.name), fuente: file.name };
+      const parsed = r.items
+        ? { items: r.items.map(i => ({ ...i, esp: i.esp || hints.esp, mes: i.mes || hints.mes, fuente: i.fuente || file.name, structured: true })), monthsFound: r.items.some(i => i.mes) || !!hints.mes,
+          espsFound: [...new Set(r.items.map(i => i.esp).filter(Boolean).concat(hints.esp ? [hints.esp] : []))] }
+        : parseTemarioLines(r.lines, '', hints);
+      all.push(...parsed.items); parsed.espsFound.forEach(e => esps.add(e)); monthsFound = monthsFound || parsed.monthsFound; names.push(file.name);
+    }
+    if (!all.length) throw new Error('No encontré temas en ' + (files.length > 1 ? 'los archivos' : 'el archivo'));
+    openTemPreview({ items: all, monthsFound, espsFound: [...esps] }, names.length > 1 ? `${names.length} archivos` : names[0]);
   } catch (e) { toast(e.message, true); }
   finally { $('#t-file').value = ''; }
 }
@@ -1561,33 +1572,43 @@ function openPaste() {
     h('div', { class: 'dlg-actions' },
       h('button', { type: 'button', class: 'btn', onclick: () => d.close() }, 'Cancelar'),
       h('button', { type: 'button', class: 'btn primary', onclick: () => {
-        const parsed = parseTemarioLines(ta.value.split(/\r?\n/));
+        const parsed = parseTemarioLines(ta.value.split(/\r?\n/), '', { fuente: 'Texto pegado' });
         if (!parsed.items.length) { toast('No encontré temas en el texto', true); return; }
         openTemPreview(parsed, 'Texto pegado');
       } }, 'Revisar'))));
   d.showModal(); setTimeout(() => ta.focus(), 50);
 }
 function openTemPreview(parsed, fuente) {
-  const def = S.ft.esp || S.fp.esp || S.form.esp || '';
-  S.temPreview = { parsed, fuente, espMode: parsed.espsFound.length ? 'auto' : def, espFallback: def, dist: 'none', nMeses: '4', replace: true,
-    keep: parsed.items.map(i => !(parsed.monthsFound && !i.mes)) };   // si hay meses, lo que queda fuera de ellos (títulos, portada) parte desmarcado
+  const def = S.ft.esp && S.ft.esp !== NONE ? S.ft.esp : S.fp.esp || S.form.esp || '';
+  S.temPreview = { parsed, fuente, espMode: parsed.espsFound.length ? 'auto' : def, espFallback: def, dist: 'none', nMeses: '4', replace: true, keep: null };
   renderTemPreview();
   if (!$('#impDlg').open) $('#impDlg').showModal();
 }
-function previewItems() {
-  const P = S.temPreview, items = P.parsed.items;
-  const kept = items.map((it, i) => ({ ...it, i })).filter(it => P.keep[it.i]);
-  const out = kept.map(it => ({ ...it, esp: P.espMode === 'auto' ? (it.esp || P.espFallback) : P.espMode }));
+/** Temas con la especialidad y el mes finales (antes de filtrar por los marcados). */
+function previewAll() {
+  const P = S.temPreview;
+  const out = P.parsed.items.map((it, i) => ({ ...it, i, esp: P.espMode === 'auto' ? (it.esp || P.espFallback) : P.espMode }));
   if (!P.parsed.monthsFound && P.dist === 'split') {
     const N = Number(P.nMeses), byEsp = {};
     for (const it of out) (byEsp[it.esp] = byEsp[it.esp] || []).push(it);
     for (const arr of Object.values(byEsp)) arr.forEach((it, k) => { it.mes = String(Math.floor(k * N / arr.length) + 1); });
   }
+  // lo que se reemplaza no cuenta como duplicado: solo los mismos meses de la misma especialidad
+  const scope = new Set(out.map(it => `${it.esp}|${it.mes || ''}`));
+  const existing = live(S.tem).filter(t => !(P.replace && scope.has(`${t.especialidad}|${t.mes || ''}`)));
+  markDuplicates(out, existing);
   return out;
 }
+const previewItems = () => { const P = S.temPreview; return previewAll().filter(it => P.keep[it.i]); };
 function renderTemPreview() {
   const P = S.temPreview, d = $('#impDlg'), items = P.parsed.items;
-  const months = new Set(items.map(i => i.mes).filter(Boolean));
+  const all = previewAll();
+  if (!P.keep || P.keepSig !== `${P.replace}|${P.espMode}|${P.espFallback}|${P.dist}`) {    // al cambiar opciones se recalculan los duplicados
+    const prev = P.keep;
+    P.keep = all.map(it => (prev && prev[it.i] === false && !it.dup) ? false : !it.dup);
+    P.keepSig = `${P.replace}|${P.espMode}|${P.espFallback}|${P.dist}`;
+  }
+  const months = new Set(all.map(i => i.mes).filter(Boolean));
   const espSel = h('select', { 'aria-label': 'Especialidad del temario' },
     P.parsed.espsFound.length ? h('option', { value: 'auto' }, `Detectada en el archivo (${P.parsed.espsFound.join(', ')})`) : h('option', { value: '' }, 'Elige la especialidad…'),
     ...ESPECIALIDADES.map(e => h('option', { value: e }, e)));
@@ -1608,57 +1629,59 @@ function renderTemPreview() {
       h('label', { class: 'check' }, r1, ' Dejar los temas sin mes'),
       h('label', { class: 'check' }, r2, ' Repartirlos en orden entre ', nSel, ' meses'));
   })();
-  const out = previewItems();
-  const targets = [...new Set(out.map(i => i.esp).filter(Boolean))];
-  const existing = live(S.tem).filter(t => targets.includes(t.especialidad)).length;
+  const scope = new Set(all.map(it => `${it.esp}|${it.mes || ''}`));
+  const replaced = live(S.tem).filter(t => scope.has(`${t.especialidad}|${t.mes || ''}`));
   const rep = h('input', { type: 'checkbox' }); rep.checked = P.replace;
-  rep.addEventListener('change', () => { P.replace = rep.checked; });
+  rep.addEventListener('change', () => { P.replace = rep.checked; renderTemPreview(); });
+  const nDup = all.filter(it => it.dup).length, multi = new Set(all.map(it => it.fuente).filter(Boolean)).size > 1;
   const groups = new Map();
-  items.forEach((it, i) => {
-    const o = out.find(x => x.i === i);
-    const key = o ? `${o.esp}|${o.mes || ''}` : `${it.esp}|${it.mes || ''}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ it, i, o });
-  });
-  const list = [...groups.entries()].map(([k, arr]) => {
+  for (const it of all) { const key = `${it.esp}|${it.mes || ''}`; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(it); }
+  const count = () => P.keep.filter(Boolean).length;
+  const list = [...groups.entries()].sort((a, b) => ESPECIALIDADES.indexOf(a[0].split('|')[0]) - ESPECIALIDADES.indexOf(b[0].split('|')[0]) || (Number(a[0].split('|')[1]) || 99) - (Number(b[0].split('|')[1]) || 99)).map(([k, arr]) => {
     const [esp, mes] = k.split('|');
     return h('div', { class: 'pvgrp' }, h('h3', {}, `${esp || 'Sin especialidad'}, ${mes ? 'mes ' + mes : 'sin mes'}`, h('span', { class: 'cnt' }, ` ${arr.length}`)),
-      ...arr.map(({ it, i }) => {
-        const cb = h('input', { type: 'checkbox' }); cb.checked = P.keep[i];
-        cb.addEventListener('change', () => { P.keep[i] = cb.checked; $('#tp-save').textContent = `Guardar ${P.keep.filter(Boolean).length} temas`; });
-        const c = classifyText(esp || P.espFallback, it.tema);
-        return h('label', { class: 'pvitem' }, cb, h('span', {}, it.tema, (c.organo || c.subtema) ? h('span', { class: 'meta' }, ` ${[c.organo, c.subtema].filter(Boolean).join(', ')}`) : null));
+      ...arr.map(it => {
+        const cb = h('input', { type: 'checkbox' }); cb.checked = P.keep[it.i];
+        cb.addEventListener('change', () => { P.keep[it.i] = cb.checked; $('#tp-save').textContent = `Guardar ${count()} temas`; });
+        const c = it.organo ? { organo: it.organo, subtema: it.subtema } : classifyText(esp || P.espFallback, it.tema);
+        return h('label', { class: 'pvitem' + (it.dup ? ' dup' : '') }, cb, h('span', {}, it.tema,
+          it.dup ? h('span', { class: 'badge warn' }, it.dup) : null,
+          it.also ? h('span', { class: 'badge' }, it.also) : null,
+          (c.organo || c.subtema) ? h('span', { class: 'meta' }, ` ${[c.organo, c.subtema].filter(Boolean).join(', ')}`) : null,
+          multi && it.fuente ? h('span', { class: 'meta' }, ` · ${it.fuente}`) : null));
       }));
   });
   d.replaceChildren(h('div', { class: 'dlg' },
     h('h2', {}, 'Revisar temario'),
-    h('p', { class: 'muted' }, `${P.fuente}: ${items.length} temas${months.size ? ` en ${months.size} mes${months.size > 1 ? 'es' : ''}` : ''}. Desmarca lo que no sea un tema (títulos, horarios, nombres).`),
+    h('p', { class: 'muted' }, `${P.fuente}: ${all.length} temas${months.size ? ` en ${months.size} mes${months.size > 1 ? 'es' : ''}` : ''}.` +
+      (nDup ? ` ${nDup} parecen repetidos en el mismo mes y quedaron desmarcados; los que se repiten en otro mes se mantienen.` : '') + ' Desmarca lo que no sea un tema (títulos, horarios, nombres).'),
     h('div', { class: 'formgrid' },
       h('label', { class: 'lbl' }, 'Especialidad'), espSel,
       needFallback ? [h('label', { class: 'lbl' }, 'Temas sin especialidad detectada'), fbSel] : null),
     distBox,
-    existing ? h('label', { class: 'check' }, rep, ` Reemplazar el temario que ya tienes de ${targets.join(', ')} (${existing} temas)`) : null,
+    replaced.length ? h('label', { class: 'check' }, rep, ` Reemplazar los ${replaced.length} temas que ya tienes de esos mismos meses (el resto de tu temario no se toca)`) : null,
     h('div', { class: 'pvlist' }, ...list),
     h('div', { class: 'dlg-actions' },
       h('button', { type: 'button', class: 'btn', onclick: () => d.close() }, 'Cancelar'),
-      h('button', { type: 'button', class: 'btn primary', id: 'tp-save', onclick: e => saveTemPreview(e.currentTarget) }, `Guardar ${P.keep.filter(Boolean).length} temas`))));
+      h('button', { type: 'button', class: 'btn primary', id: 'tp-save', onclick: e => saveTemPreview(e.currentTarget) }, `Guardar ${count()} temas`))));
 }
 async function saveTemPreview(btn) {
   const P = S.temPreview, out = previewItems();
   if (!out.length) { toast('No hay temas marcados', true); return; }
   if (out.some(i => !ESPECIALIDADES.includes(i.esp))) { toast('Elige la especialidad del temario', true); return; }
-  const targets = [...new Set(out.map(i => i.esp))];
+  const targets = [...new Set(out.map(i => i.esp))], scope = new Set(previewAll().map(it => `${it.esp}|${it.mes || ''}`));
   busy(btn, true, 'Guardando…');
   try {
     if (P.replace) {
-      const old = live(S.tem).filter(t => targets.includes(t.especialidad)).map(t => ({ id: t.id, deleted: true }));
+      const old = live(S.tem).filter(t => scope.has(`${t.especialidad}|${t.mes || ''}`)).map(t => ({ id: t.id, deleted: true }));
       if (old.length) await saveMany('temario', old);
     }
     const base = Date.now();
     await saveMany('temario', out.map((it, k) => ({
       id: 't_' + crypto.randomUUID(), especialidad: it.esp, mes: String(it.mes || ''), tema: it.tema,
       organo: organosDe(it.esp).includes(it.organo) ? it.organo : '', subtema: subtemasDe(it.esp).includes(it.subtema) ? it.subtema : '',
-      orden: base + k, fuente: P.fuente, deleted: false
+      detalle: (it.detalle || (it.original && it.original !== it.tema ? it.original : '') || '').slice(0, 1500),
+      orden: base + k, fuente: it.fuente || P.fuente, deleted: false
     })));
   } catch (e) { toast('No se pudo guardar: ' + e.message, true); return; }
   finally { busy(btn, false); }
@@ -1856,7 +1879,7 @@ function bindEvents() {
   });
 
   // Práctica
-  $('#t-file').addEventListener('change', e => { const f = e.target.files[0]; if (f) onTemarioFile(f); });
+  $('#t-file').addEventListener('change', e => { if (e.target.files.length) onTemarioFile(e.target.files); });
   $('#t-paste').addEventListener('click', openPaste);
   $('#t-add').addEventListener('click', () => openTopic(null));
   $('#t-mes').addEventListener('change', e => { S.ft.mes = e.target.value; renderTem(); });

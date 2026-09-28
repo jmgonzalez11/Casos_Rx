@@ -346,3 +346,7 @@ dialog.viewer::backdrop{background:#000}
 .countdown.soon{background:color-mix(in srgb,var(--warn) 22%,var(--surface))}
 .planrow{display:flex;justify-content:space-between;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;font:inherit;text-align:left;cursor:pointer}
 .chip.static{pointer-events:none}
+
+.pvitem.dup>span{color:var(--muted)}
+.pvitem .badge{margin-left:6px}
+.tdet{margin:0;font-size:.9rem;line-height:1.45;white-space:pre-line}

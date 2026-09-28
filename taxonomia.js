@@ -36,7 +36,7 @@ const L = (...groups) => [...new Set(groups.flat())];
 const TAXONOMIA = {
   'Negato': {
     organos: [
-      ['Tórax', ['torax', 'pulmon', 'neumo', 'pleura', 'derrame pleural', 'mediastin', 'hilio', 'cardiomegalia', 'atelectasia', 'consolidacion', 'bronq', 'traquea', 'diafragm', 'silueta cardiaca', 'edema pulmonar', 'cavitacion', 'hiperinsuflacion', 'costal', 'costilla']],
+      ['Tórax', ['torax', 'pulmon', 'neumo', 'pleura', 'derrame pleural', 'mediastin', 'hilio', 'cardiomegalia', 'atelectasia', 'consolidacion', 'bronq', 'traquea', 'diafragm', 'silueta cardiaca', 'edema pulmonar', 'cavitacion', 'hiperinsuflacion', 'costal', 'costilla', 'alveolar', 'via aerea', 'uci', 'portatil', 'asma', 'tuberculo', 'micobacter', 'colagenopat', 'aspergil', 'aort', 'sindrome aortico', 'toracic', 'bronquiol', 'sarcoid']],
       ['Abdomen', ['abdomen', 'abdominal', 'neumoperitoneo', 'obstruccion', 'ileo', 'asas', 'colon', 'gastric', 'estomag', 'fecaloma', 'volvulo', 'distension', 'neumatosis']],
       ['Columna', ['columna', 'vertebr', 'cervical', 'dorsal', 'lumbar', 'sacro', 'escoliosis', 'espondil', 'listesis', 'aplastamiento', 'odontoides']],
       ['Hombro y extremidad superior', ['hombro', 'clavicul', 'escapul', 'humer', 'codo', 'radio distal', 'cabeza radial', 'cubito', 'muneca', 'mano', 'carpo', 'escafoides', 'metacarp', 'falange', 'dedo', 'acromio']],
@@ -176,7 +176,7 @@ const TAXONOMIA = {
 
   'Ecografía Doppler': {
     organos: [
-      ['Carótidas y vertebrales', ['carotid', 'vertebral', 'bulbo carotideo', 'troncos supraaorticos']],
+      ['Carótidas y vertebrales', ['carotid', 'vertebral', 'bulbo carotideo', 'troncos supraaorticos', 'subclavia', 'robo']],
       ['Venas de extremidad inferior', ['tvp', 'trombosis venosa profunda', 'poplite', 'vena femoral', 'safen', 'varices', 'insuficiencia venosa', 'gemelar', 'soleal', 'cayado', 'extremidad inferior']],
       ['Venas de extremidad superior', ['vena subclavia', 'vena axilar', 'vena yugular', 'vena basilica', 'vena cefalica', 'extremidad superior', 'picc']],
       ['Arterias de extremidades', ['arterial periferic', 'arteria femoral', 'arteria poplitea', 'pedia', 'tibial', 'claudicacion', 'isquemia critica', 'indice tobillo', 'bypass', 'by pass', 'injerto arterial']],
@@ -206,7 +206,7 @@ const TAXONOMIA = {
 
   'Neurorradiología': {
     organos: [
-      ['Cerebro', ['cerebr', 'encefal', 'cortical', 'subcortical', 'sustancia blanca', 'ganglios basales', 'talam', 'hipocamp', 'lobulo frontal', 'lobulo temporal', 'lobulo parietal', 'lobulo occipital', 'cuerpo calloso', 'ventricul', 'hemisfer', 'leucoencefal', 'esclerosis multiple', 'desmieliniz', 'acv', 'ictus', 'glioma', 'glioblastoma', 'meningioma', 'subdural', 'hsa', 'hidrocefalia', 'demencia', 'intracraneal']],
+      ['Cerebro', ['cerebr', 'encefal', 'cortical', 'subcortical', 'sustancia blanca', 'ganglios basales', 'talam', 'hipocamp', 'lobulo frontal', 'lobulo temporal', 'lobulo parietal', 'lobulo occipital', 'cuerpo calloso', 'ventricul', 'hemisfer', 'leucoencefal', 'esclerosis multiple', 'desmieliniz', 'acv', 'ictus', 'glioma', 'glioblastoma', 'meningioma', 'subdural', 'hsa', 'hidrocefalia', 'demencia', 'intracraneal', 'infarto', 'intraparenquim', 'cavernoma', 'cadasil', 'melas', 'meningitis', 'ependimitis', 'intraaxial', 'extraaxial', 'snc', 'pineal', 'creutzfeldt', 'adem', 'maltrato', 'trauma no accidental', 'hemorragia intracraneana', 'hemorragia intracraneal']],
       ['Hipófisis y región selar', ['hipofis', 'selar', 'sellar', 'silla turca', 'macroadenoma', 'microadenoma', 'craneofaringioma', 'rathke', 'tallo hipofisario', 'prolactinoma']],
       ['Fosa posterior y tronco', ['cerebel', 'tronco encefal', 'protuberancia', 'bulbo raquideo', 'mesencef', 'fosa posterior', 'pontocerebeloso', 'schwannoma vestibular', 'neurinoma del acustico', 'chiari', 'cuarto ventriculo']],
       ['Órbita', ['orbita', 'orbitar', 'nervio optico', 'globo ocular', 'ocular', 'neuritis optica', 'lacrimal', 'extraocular', 'exoftalm', 'oftalmopatia']],
@@ -215,8 +215,8 @@ const TAXONOMIA = {
       ['Cuello: espacios profundos y ganglios', ['cuello', 'parafaring', 'retrofaring', 'espacio carotideo', 'espacio masticador', 'parotid', 'submandibul', 'glandula salival', 'ganglio cervical', 'adenopatia cervical', 'branquial', 'tirogloso', 'absceso cervical', 'periamigdal']],
       ['Faringe, laringe y cavidad oral', ['faring', 'laring', 'nasofaring', 'orofaring', 'hipofaring', 'cuerdas vocales', 'glotis', 'glotic', 'amigdal', 'epiglot', 'cavidad oral', 'lengua']],
       ['Tiroides y paratiroides', ['tiroid', 'paratiroid', 'bocio']],
-      ['Columna y médula', ['columna', 'medula', 'medular', 'raquid', 'vertebr', 'disco', 'discal', 'hernia del nucleo', 'cervical', 'dorsal', 'lumbar', 'sacro', 'cauda equina', 'cono medular', 'mielopatia', 'mielitis', 'siringomielia', 'espondil', 'radicul']],
-      ['Vasos intra y extracraneales', ['aneurism', 'carotid', 'vertebral', 'basilar', 'poligono de willis', 'arteria cerebral', 'mav', 'malformacion arteriovenosa', 'fistula dural', 'seno venoso', 'trombosis venosa cerebral', 'diseccion arterial', 'moyamoya', 'angiotc', 'angio tc', 'angio-tc', 'angiotac', 'angio tac', 'angiorm', 'angio rm', 'angio-rm', 'angiografia']],
+      ['Columna y médula', ['columna', 'medula', 'medular', 'raquid', 'vertebr', 'disco', 'discal', 'hernia del nucleo', 'cervical', 'dorsal', 'lumbar', 'sacro', 'cauda equina', 'cono medular', 'mielopatia', 'mielitis', 'siringomielia', 'espondil', 'radicul', 'empiema epidural', 'mielograf', 'intrarraquid']],
+      ['Vasos intra y extracraneales', ['aneurism', 'carotid', 'vertebral', 'basilar', 'poligono de willis', 'arteria cerebral', 'mav', 'malformacion arteriovenosa', 'fistula dural', 'seno venoso', 'trombosis venosa cerebral', 'diseccion arterial', 'moyamoya', 'angiotc', 'angio tc', 'angio-tc', 'angiotac', 'angio tac', 'angiorm', 'angio rm', 'angio-rm', 'angiografia', 'senos durales', 'sistema venoso profundo', 'cervicocraneal', 'malformaciones vasculares', 'diseccion']],
       ['Nervios craneales y plexos', ['nervio craneal', 'par craneal', 'trigemin', 'nervio facial', 'plexo braquial', 'plexo', 'neuralgia']]
     ],
     subtemas: [
@@ -278,16 +278,17 @@ const TAXONOMIA = {
 
   'Pediatría': {
     organos: [
-      ['Tórax y vía aérea', ['torax', 'pulmon', 'neumon', 'bronq', 'traquea', 'via aerea', 'crup', 'epiglotitis', 'cuerpo extrano', 'mediastin', 'timo', 'atelectasia', 'derrame', 'cpam', 'secuestro', 'hernia diafragmatica', 'membrana hialina', 'taquipnea transitoria', 'aspiracion meconial', 'displasia broncopulmonar']],
-      ['Tubo digestivo y abdomen', ['estenosis hipertrofica', 'pilor', 'invaginac', 'malrotacion', 'volvulo', 'apendic', 'enterocolitis', 'ecn', 'atresia duodenal', 'atresia esofagica', 'atresia intestinal', 'hirschsprung', 'ileo meconial', 'meckel', 'obstruccion', 'intestin', 'abdomen', 'reflujo gastroesofagico']],
-      ['Hígado, vía biliar y bazo', ['higad', 'hepat', 'biliar', 'atresia biliar', 'quiste de coledoco', 'colelit', 'hepatoblastoma', 'bazo', 'esplen', 'kasai']],
-      ['Riñón y vía urinaria', ['rinon', 'renal', 'nefr', 'hidronefrosis', 'pielectasia', 'reflujo vesicoureteral', 'rvu', 'valvas', 'pieloureteral', 'ureterocele', 'duplicidad', 'multiquistic', 'wilms', 'pielonefritis', 'uretrocistografia', 'vejiga']],
+      ['Tórax y vía aérea', ['torax', 'pulmon', 'neumon', 'bronq', 'traquea', 'via aerea', 'crup', 'epiglotitis', 'cuerpo extrano', 'mediastin', 'timo', 'atelectasia', 'derrame', 'cpam', 'secuestro', 'hernia diafragmatica', 'membrana hialina', 'taquipnea transitoria', 'aspiracion meconial', 'displasia broncopulmonar', 'respiratori', 'diafragm', 'toracic', 'neumopat', 'asma', 'eventracion']],
+      ['Tubo digestivo y abdomen', ['estenosis hipertrofica', 'pilor', 'invaginac', 'malrotacion', 'volvulo', 'apendic', 'enterocolitis', 'ecn', 'atresia duodenal', 'atresia esofagica', 'atresia intestinal', 'hirschsprung', 'ileo meconial', 'meckel', 'obstruccion', 'intestin', 'abdomen', 'reflujo gastroesofagico', 'trauma abdominal', 'tc abdominal', 'abdominal']],
+      ['Hígado, vía biliar y bazo', ['higad', 'hepat', 'biliar', 'atresia biliar', 'quiste de coledoco', 'colelit', 'hepatoblastoma', 'bazo', 'esplen', 'kasai', 'hipertension portal', 'trasplante hepatico']],
+      ['Riñón y vía urinaria', ['rinon', 'renal', 'nefr', 'hidronefrosis', 'pielectasia', 'reflujo vesicoureteral', 'rvu', 'valvas', 'pieloureteral', 'ureterocele', 'duplicidad', 'multiquistic', 'wilms', 'pielonefritis', 'uretrocistografia', 'vejiga', 'hipertension arterial', 'trasplante renal', 'litiasis urinaria', 'nefrocalcinosis']],
       ['Suprarrenales y retroperitoneo', ['suprarrenal', 'neuroblastoma', 'retroperiton']],
-      ['Gónadas y pelvis', ['ovari', 'testic', 'escrot', 'utero', 'pelvis', 'criptorquid', 'hidrocele', 'pubertad']],
-      ['Neuro (cerebro)', ['cerebr', 'encefal', 'matriz germinal', 'leucomalacia', 'hipoxico isquemic', 'hidrocefalia', 'transfontanelar', 'fontanela', 'craneosinostosis', 'macrocefalia', 'glioma', 'meduloblastoma', 'ependimoma', 'pilocitico']],
-      ['Columna y médula', ['columna', 'medula', 'medular', 'disrafia', 'mielomeningocele', 'medula anclada', 'cono medular', 'escoliosis', 'sinus dermico', 'lipomielo']],
-      ['Musculoesquelético', ['displasia de cadera', 'ddh', 'cadera', 'epifisiolisis', 'perthes', 'fractura', 'salter', 'fisis', 'osteomielitis', 'artritis septica', 'sinovitis transitoria', 'displasia esqueletica', 'raquitismo', 'rodilla', 'codo', 'oseo', 'hueso']],
-      ['Cabeza y cuello', ['cuello', 'orbita', 'paranasal', 'sinusitis', 'adenoides', 'adenitis', 'tirogloso', 'branquial', 'linfangioma', 'malformacion linfatica', 'hemangioma infantil', 'retrofaring', 'mastoiditis', 'oido', 'tiroid']]
+      ['Corazón y grandes vasos', ['cardiopat', 'cardiac', 'coartacion', 'arco aortico', 'anillo vascular', 'anillos vasculares', 'fallot', 'transposicion', 'canal av', 'ductus', 'drenaje venoso anomalo']],
+      ['Gónadas y pelvis', ['ovari', 'testic', 'escrot', 'utero', 'pelvis', 'criptorquid', 'hidrocele', 'pubertad', 'genitograf', 'sexo ambiguo']],
+      ['Neuro (cerebro)', ['cerebr', 'encefal', 'matriz germinal', 'leucomalacia', 'hipoxico isquemic', 'hidrocefalia', 'transfontanelar', 'fontanela', 'craneosinostosis', 'macrocefalia', 'glioma', 'meduloblastoma', 'ependimoma', 'pilocitico', 'neurocutane', 'neurofibromatosis', 'esclerosis tuberosa', 'craneo', 'craneal', 'suturas']],
+      ['Columna y médula', ['columna', 'medula', 'medular', 'disrafia', 'mielomeningocele', 'medula anclada', 'cono medular', 'escoliosis', 'sinus dermico', 'lipomielo', 'lumbar', 'espondil', 'scheuermann']],
+      ['Musculoesquelético', ['displasia de cadera', 'ddh', 'cadera', 'epifisiolisis', 'perthes', 'fractura', 'salter', 'fisis', 'osteomielitis', 'artritis septica', 'sinovitis transitoria', 'displasia esqueletica', 'raquitismo', 'rodilla', 'codo', 'oseo', 'hueso', 'edad osea', 'defecto fibroso', 'fibroma no osificante', 'osteocondrosis', 'pie bot', 'pie plano', 'coalicion', 'tumores oseos', 'artritis', 'raquitismo', 'oseas', 'displasias esqueleticas', 'sifilis']],
+      ['Cabeza y cuello', ['cuello', 'orbita', 'paranasal', 'sinusitis', 'adenoides', 'adenitis', 'tirogloso', 'branquial', 'linfangioma', 'malformacion linfatica', 'hemangioma infantil', 'retrofaring', 'mastoiditis', 'oido', 'tiroid', 'adenopat', 'cervical', 'salival', 'parotid', 'glandulas salivales']]
     ],
     subtemas: [
       ['Neonatal', ['neonat', 'recien nacido', 'prematur', 'membrana hialina', 'taquipnea transitoria', 'aspiracion meconial', 'ecn', 'enterocolitis necrotizante', 'matriz germinal', 'leucomalacia', 'cateter umbilical', 'displasia broncopulmonar']],
@@ -307,7 +308,7 @@ const TAXONOMIA = {
 
   'Imágenes mamarias': {
     organos: [
-      ['Mama', ['mama', 'mamari', 'cuadrante', 'parenquima mamario', 'calcific', 'bi-rads', 'birads', 'nodul', 'masa', 'distorsion', 'asimetria', 'fibroadenoma', 'carcinoma ductal', 'carcinoma lobulillar']],
+      ['Mama', ['mama', 'mamari', 'cuadrante', 'parenquima mamario', 'calcific', 'bi-rads', 'birads', 'nodul', 'masa', 'distorsion', 'asimetria', 'fibroadenoma', 'carcinoma ductal', 'carcinoma lobulillar', 'mamograf', 'tomosintesis', 'quiste', 'carcinoma', 'biopsia', 'estereotax', 'galactograf', 'mastitis', 'calcificacion']],
       ['Axila y ganglios', ['axila', 'axilar', 'ganglio', 'adenopat', 'centinela']],
       ['Pezón y región retroareolar', ['pezon', 'retroareolar', 'areola', 'secrecion', 'telorrea', 'ectasia ductal', 'galactoforo']],
       ['Implantes', ['implante', 'protesis mamaria', 'ruptura intracapsular', 'ruptura extracapsular', 'siliconoma', 'bia-alcl', 'periprotesic', 'linguini']],
@@ -333,7 +334,7 @@ const TAXONOMIA = {
 
   'Digestivo': {
     organos: [
-      ['Faringe y esófago', ['faring', 'esofag', 'deglucion', 'acalasia', 'zenker', 'presbiesofago', 'hernia hiatal', 'reflujo gastroesofagico', 'cardias', 'schatzki', 'membrana esofagica', 'varices esofagicas', 'barrett']],
+      ['Faringe y esófago', ['faring', 'esofag', 'deglucion', 'acalasia', 'zenker', 'presbiesofago', 'hernia hiatal', 'reflujo gastroesofagico', 'cardias', 'schatzki', 'membrana esofagica', 'varices esofagicas', 'barrett', 'digestivo alto', 'disfagia', 'contrastado', 'esofagogram']],
       ['Estómago y duodeno', ['estomag', 'gastric', 'gastr', 'duoden', 'pilor', 'ulcera peptica', 'linitis', 'bezoar', 'gastrectomia']],
       ['Intestino delgado', ['intestino delgado', 'yeyun', 'ileon', 'ileal', 'ileitis', 'crohn', 'enteritis', 'celiaca', 'meckel', 'carcinoide', 'bridas', 'invaginac']],
       ['Colon y recto', ['colon', 'colic', 'colit', 'recto', 'rectal', 'sigmoid', 'ciego', 'diverticul', 'polipo', 'colorrectal', 'colonograf', 'enema', 'megacolon', 'volvulo']],
@@ -343,11 +344,13 @@ const TAXONOMIA = {
       ['Peritoneo, mesenterio y pared', L(KW_PERITONEO, ['hernia', 'pared abdominal'])],
       ['Anastomosis y cirugía bariátrica', ['bariatric', 'bypass gastrico', 'by pass gastrico', 'manga gastrica', 'sleeve', 'anastomo', 'gastroyeyuno', 'fundoplic', 'nissen', 'ileostom', 'colostom', 'petersen']],
       ['Suelo pélvico y canal anal', ['suelo pelvico', 'piso pelvico', 'defecograf', 'prolapso', 'rectocele', 'fistula perianal', 'perianal', 'esfinter anal', 'canal anal', 'incontinencia fecal']],
-      ['Vejiga y uretra (fluoroscopía)', ['vejiga', 'vesical', 'uretra', 'uretral', 'cistograf', 'uretrocistograf', 'uretrograf', 'reflujo vesicoureteral', 'valvas']]
+      ['Vejiga y uretra (fluoroscopía)', ['vejiga', 'vesical', 'uretra', 'uretral', 'cistograf', 'uretrocistograf', 'uretrograf', 'reflujo vesicoureteral', 'valvas']],
+      ['Útero y trompas (histerosalpingografía)', ['histerosalping', 'hsg', 'trompa', 'tubaric', 'hidrosalpinx', 'utero', 'uterin']]
     ],
     subtemas: [
       ['EED y esofagograma', ['eed', 'esofagogram', 'esofagograf', 'esofago estomago duodeno', 'esofago-estomago-duodeno', 'serie esofagogastroduodenal', 'seriada', 'transito esofag', 'bario', 'baritad']],
       ['Videodeglución', ['videodeglucion', 'video deglucion', 'videofluoroscop', 'deglucion', 'penetracion laringea', 'aspiracion laringotraqueal', 'aspiracion', 'disfagia orofaringea', 'residuo en valleculas', 'valleculas', 'senos piriformes']],
+      ['Histerosalpingografía', ['histerosalping', 'hsg', 'obstruccion tubaria', 'hidrosalpinx', 'infertilidad']],
       ['Cistografía', ['cistograf', 'rotura vesical', 'fistula vesical', 'filtracion vesical', 'dehiscencia vesical', 'fuga vesical']],
       ['Uretrocistografía (retrógrada y miccional)', ['uretrocistograf', 'uretrograf', 'ucg', 'cumg', 'miccional', 'estenosis uretral', 'estrechez uretral', 'valvas', 'reflujo vesicoureteral', 'rvu', 'lesion uretral', 'rotura uretral']],
       ['Estudios contrastados y técnica', ['transito', 'enema', 'contraste hidrosoluble', 'fluoroscop', 'radioscop', 'tecnica', 'protocolo']],

@@ -112,6 +112,8 @@ function renderTopicPage(id) {
     h('button', { type: 'button', class: 'link back', onclick: () => { S.topicPage = null; $('#title').textContent = TAB_TITLES.tem; renderTem(); } }, '‹ Temario'),
     h('h2', { class: 'ptitle' }, t.tema),
     h('p', { class: 'muted' }, [t.especialidad, t.mes ? 'Mes ' + t.mes : 'Sin mes', cc.organo, cc.subtema].filter(Boolean).join(' · ')),
+    t.detalle ? h('p', { class: 'tdet' }, t.detalle) : null,
+    t.fuente ? h('p', { class: 'hint' }, 'Fuente: ' + t.fuente) : null,
     h('div', { class: 'btnrow tight' },
       cases.length ? h('button', { type: 'button', class: 'btn primary sm', onclick: () => { showTab('prac'); startPractice(cases); } }, `Practicar ${cases.length} caso${cases.length > 1 ? 's' : ''}`) : null,
       h('button', { type: 'button', class: 'btn sm', onclick: () => openTopic(id) }, 'Editar tema'),
